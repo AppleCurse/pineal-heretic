@@ -350,3 +350,89 @@ function init() {
   appendLog(ts(), "INFO", "PINEAL-HERETIC v2.0 — SIGINT CONSOLE ONLINE");
 }
 init();
+
+document.getElementById("btn-shadow").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-shadow");
+    btn.disabled = true;
+    btn.innerText = "YÜKLENİYOR...";
+    
+    // We assume the user profile input is from rituals and envies
+    const user = {
+        rituals: document.getElementById("inp-rituals").value.split(","),
+        music: document.getElementById("inp-playlist").value,
+        envies: document.getElementById("inp-envies").value
+    };
+    
+    // For the target profile, we try to gather it from the existing result if they ran a scrape first,
+    // otherwise we just send the URL and we would need it to be scraped. The user plan assumes target bio/posts are passed.
+    // If they already ran a scrape, `window.lastScrapedTarget` could be used.
+    // Let us fetch the target info from the DOM if available, otherwise just use mock
+    const targetUrl = document.getElementById("inp-target-url").value;
+    
+    const target = window.lastScrapedTarget || {
+        username: targetUrl.split("/").pop() || "hedef_kisi",
+        bio: "Gerçek bio verisi scraperdan alınmadı.",
+        posts: ["test post", "başka bir post"]
+    };
+
+    try {
+        const response = await fetch("/api/shadow/generate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                target_profile: target,
+                user_profile: user,
+                desired_action: "cevap versin",
+                target_beliefs: ["anlaşılmak", "özel hissetmek"]
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            alert(result.error);
+            return;
+        }
+
+        const darkMeter = `
+            <div class="dark-profile">
+                <div class="meter">
+                    <label>Machiavellianism</label>
+                    <progress value="${result.dark_profile.machiavellianism * 100}" max="100"></progress>
+                </div>
+                <div class="meter">
+                    <label>Narcissism</label>
+                    <progress value="${result.dark_profile.narcissism * 100}" max="100"></progress>
+                </div>
+                <div class="meter">
+                    <label>Psychopathy</label>
+                    <progress value="${result.dark_profile.psychopathy * 100}" max="100"></progress>
+                </div>
+                <div class="exploitability ${result.confidence > 0.7 ? "high" : "low"}">
+                    Exploitability: ${(result.confidence * 100).toFixed(0)}%
+                </div>
+            </div>
+        `;
+        
+        const message = `
+            <div class="shadow-message">
+                <div class="strategy-tag">${result.strategy}</div>
+                <div class="message-text" style="color: #fff; font-size: 1.1rem; line-height: 1.5;">${result.message}</div>
+            </div>
+        `;
+        
+        // Append it to results container instead of overwriting, so we can see it with normal results
+        const container = document.getElementById("results-container");
+        const div = document.createElement("div");
+        div.style.gridColumn = "1 / -1";
+        div.innerHTML = darkMeter + message;
+        container.prepend(div);
+        
+    } catch (e) {
+        alert("Shadow Mode Error: " + e);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "💀 SHADOW MODE";
+    }
+});
+

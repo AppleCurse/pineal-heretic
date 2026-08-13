@@ -23,6 +23,12 @@ try:
 except Exception:
     InstagramGhostScraper = None
 
+try:
+    from agent_core.shadow.shadow_executor import ShadowExecutor
+    shadow_executor = ShadowExecutor()
+except Exception:
+    shadow_executor = None
+
 app = FastAPI(title="PINEAL-HERETIC v2.0 API")
 
 app.add_middleware(
@@ -248,6 +254,8 @@ async def api_vault(req: VaultPayload):
         await broadcast_log(req.client_id, "INFO", f"KASA: Cookie belleğe mühürlendi.")
     if req.api_key:
         executor.llm_gateway.set_key(req.api_key)
+        if shadow_executor is not None:
+            shadow_executor.llm_gateway.set_key(req.api_key)
         vault["or_key"] = True
         await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
         
@@ -287,6 +295,24 @@ async def api_telemetry(client_id: str):
         "vault": "x_cookie" in vault,
         "search_engine": vault.get("search_keys", False)
     }
+
+@app.post("/api/shadow/analyze")
+async def shadow_analyze(profile: dict):
+    """Dark Triad analizi"""
+    if shadow_executor is None:
+        return {"error": "Shadow Protocol yüklü değil"}
+    from agent_core.psychology.dark_triad import DarkTriadAnalyzer
+    analyzer = DarkTriadAnalyzer()
+    result = analyzer.analyze(profile)
+    return result.model_dump()
+
+@app.post("/api/shadow/generate")
+async def shadow_generate(task: dict):
+    """Shadow mesaj üretimi"""
+    if shadow_executor is None:
+        return {"error": "Shadow Protocol yüklü değil"}
+    result = await shadow_executor.execute(task)
+    return result.model_dump()
 
 os.makedirs("frontend", exist_ok=True)
 # Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin
