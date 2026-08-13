@@ -1,0 +1,212 @@
+from fastapi import FastAPI, WebSocket, Request, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import asyncio
+import json
+import os
+import hashlib
+from datetime import datetime
+
+try:
+    from agent_core.task_executor import PinealExecutor, InsufficientEvidenceError
+except Exception:
+    from task_executor import PinealExecutor, InsufficientEvidenceError
+
+try:
+    from scraper import scrape_readonly
+except Exception:
+    scrape_readonly = None
+
+app = FastAPI(title="PINEAL-HERETIC v2.0 API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+connected_websockets = {}  # client_id -> set of websockets
+executors = {}  # client_id -> PinealExecutor
+vaults = {}  # client_id -> dict
+
+def get_executor(client_id: str) -> PinealExecutor:
+    if client_id not in executors:
+        executors[client_id] = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
+    return executors[client_id]
+
+def get_vault(client_id: str) -> dict:
+    if client_id not in vaults:
+        vaults[client_id] = {}
+    return vaults[client_id]
+
+async def broadcast_log(client_id: str, level: str, msg: str):
+    ts = datetime.now().strftime("%H:%M:%S")
+    payload = json.dumps({"type": "log", "ts": ts, "level": level, "msg": msg})
+    ws_set = connected_websockets.get(client_id, set())
+    for ws in list(ws_set):
+        try:
+            await ws.send_text(payload)
+        except:
+            ws_set.discard(ws)
+
+def sync_log(client_id: str, level: str, msg: str):
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(broadcast_log(client_id, level, msg))
+    except RuntimeError:
+        pass 
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await websocket.accept()
+    if client_id not in connected_websockets:
+        connected_websockets[client_id] = set()
+    connected_websockets[client_id].add(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except:
+        connected_websockets[client_id].discard(websocket)
+
+class InitiatePayload(BaseModel):
+    client_id: str
+    url: str
+    rituals: str
+    playlist: str
+    envies: str
+    aggressiveness: float
+    evidence_th: int
+
+async def run_mission(req: InitiatePayload):
+    client_id = req.client_id
+    executor = get_executor(client_id)
+    vault = get_vault(client_id)
+    
+    try:
+        payload = {
+            "user_profile": {
+                "private_rituals": [r.strip() for r in req.rituals.split(",")],
+                "late_night_playlist": [req.playlist],
+                "secret_envies": [e.strip() for e in req.envies.split(",")],
+            },
+            "target_profile": {"bio": "", "posts": [], "post_times": [], "images": []}
+        }
+        
+        cookie = vault.get("x_cookie")
+        if req.url and scrape_readonly:
+            await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url}")
+            try:
+                data = scrape_readonly(req.url, cookies=cookie)
+                payload["target_profile"].update({k: v for k, v in data.items() if v})
+                await broadcast_log(client_id, "INFO", f"TELEMETRİ: {len(data.get('posts', []))} gönderi ele geçirildi.")
+            except Exception as e:
+                await broadcast_log(client_id, "ERROR", f"UPLINK KOPTU: {str(e)[:100]}")
+        
+        task_id = f"op_{datetime.now().strftime('%H%M%S')}"
+        for attempt in range(1, 4):
+            try:
+                await broadcast_log(client_id, "INFO", f"OPERASYON BAŞLATILIYOR (Deneme {attempt}/3)...")
+                res = await executor.execute_task(payload, task_id)
+                await broadcast_result(client_id, res)
+                return
+            except InsufficientEvidenceError:
+                raise
+            except Exception as e:
+                await broadcast_log(client_id, "ERROR", f"HATA: {type(e).__name__}: {str(e)[:100]}")
+                if attempt == 3:
+                    await broadcast_log(client_id, "ERROR", "SİSTEM PANİĞİ: MAKSİMUM DENEME AŞILDI.")
+    except InsufficientEvidenceError:
+        await broadcast_result_error(client_id, "halted_evidence", "DURDURULDU: YETERSİZ KANIT")
+    except Exception as e:
+        await broadcast_result_error(client_id, "failed", f"SİSTEM PANİĞİ: {str(e)}")
+
+async def broadcast_result_error(client_id, status, msg):
+    await broadcast_log(client_id, "ERROR", msg)
+    data = {"type": "result", "status": status}
+    ws_set = connected_websockets.get(client_id, set())
+    for ws in list(ws_set):
+        try:
+            await ws.send_text(json.dumps(data))
+        except:
+            pass
+
+async def broadcast_result(client_id, res):
+    def find(chain, name):
+        for e in chain:
+            if e["agent"] == name:
+                return e["result"]
+        return None
+        
+    data = {
+        "type": "result",
+        "status": res.status,
+        "mirror": find(res.evidence_chain, "mirror_truth"),
+        "reading": find(res.evidence_chain, "human_behavior"),
+        "reso": find(res.evidence_chain, "resonance_calc"),
+        "hook": find(res.evidence_chain, "pattern_interrupt")
+    }
+    ws_set = connected_websockets.get(client_id, set())
+    for ws in list(ws_set):
+        try:
+            await ws.send_text(json.dumps(data))
+        except:
+            pass
+
+@app.post("/api/initiate")
+async def api_initiate(req: InitiatePayload, background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_mission, req)
+    return {"status": "started"}
+
+class VaultPayload(BaseModel):
+    client_id: str
+    x_cookie: str = ""
+    api_key: str = ""
+    
+@app.post("/api/vault")
+async def api_vault(req: VaultPayload):
+    vault = get_vault(req.client_id)
+    executor = get_executor(req.client_id)
+    if req.x_cookie:
+        vault["x_cookie"] = req.x_cookie
+        await broadcast_log(req.client_id, "INFO", f"KASA: Cookie belleğe mühürlendi.")
+    if req.api_key:
+        executor.llm_gateway.set_key(req.api_key)
+        vault["or_key"] = True
+        await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
+    return {"status": "secured"}
+
+class OverridePayload(BaseModel):
+    client_id: str
+    fact: str
+    tag: str
+
+@app.post("/api/override")
+async def api_override(req: OverridePayload):
+    if req.fact.strip():
+        executor = get_executor(req.client_id)
+        mem_dir = executor.memory.storage_path
+        lp = os.path.join(mem_dir, "learnings.json")
+        learn = json.load(open(lp, encoding="utf-8")) if os.path.exists(lp) else []
+        learn.append({"fact": req.fact.strip(), "tag": req.tag.strip(), "ts": datetime.now().isoformat(), "hash": hashlib.sha256(req.fact.strip().encode()).hexdigest()[:12]})
+        with open(lp, "w", encoding="utf-8") as f:
+            json.dump(learn, f, ensure_ascii=False, indent=2)
+        await broadcast_log(req.client_id, "INFO", f"HAFIZA: Yeni konsept mühürlendi [{req.tag.strip()}]")
+    return {"status": "sealed"}
+
+@app.get("/api/telemetry")
+async def api_telemetry(client_id: str):
+    executor = get_executor(client_id)
+    vault = get_vault(client_id)
+    return {
+        "core": True,
+        "gateway": getattr(executor.llm_gateway, 'api_key', None) is not None,
+        "scraper": scrape_readonly is not None,
+        "vault": "x_cookie" in vault
+    }
+
+os.makedirs("frontend", exist_ok=True)
+# Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
