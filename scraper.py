@@ -124,11 +124,9 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
         if "error" in scraped_data:
             raise scraped_data["error"]
 
-        # Fallback (Eğer GraphQL değişmişse veya veri gelmemişse)
-        if not scraped_data["bio"]:
-            scraped_data["bio"] = "Kamusal biyografi taranamadi veya gizli."
-        if not scraped_data["posts"]:
-            scraped_data["posts"] = ["Acik paylasim metni bulunamadi."]
+        # Fallback yerine Exception (Halüsinasyon Zırhı)
+        if not scraped_data["bio"] and not scraped_data["posts"]:
+            raise Exception("InsufficientEvidenceError: X profili tamamen bos veya veri cekilemedi. Halusinasyon riskine karsi islem durduruldu.")
             
         # Sadece ilk 5 tweet ve resmi tut
         scraped_data["posts"] = scraped_data["posts"][:5]

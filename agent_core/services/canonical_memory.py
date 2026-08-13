@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+from collections import defaultdict
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -23,7 +24,7 @@ class CanonicalMemory:
     def __init__(self, storage_path: str = "./memory/"):
         self.storage_path = storage_path
         os.makedirs(storage_path, exist_ok=True)
-        self._lock = asyncio.Lock()
+        self._locks = defaultdict(asyncio.Lock)
     
     async def merge_evidence(self, task_id: str, evidence_chain: List[Dict]):
         """
@@ -31,7 +32,7 @@ class CanonicalMemory:
         """
         profile_file = os.path.join(self.storage_path, f"{task_id}.json")
         
-        async with self._lock:
+        async with self._locks[task_id]:
             # Mevcut veriyi oku
             existing = {}
             if os.path.exists(profile_file):

@@ -26,7 +26,8 @@ class UncertaintyEngine:
         has_absolutes = any(marker in result_text.lower()
                            for marker in self.HALUCINATION_MARKERS)
 
-        confidence = getattr(result, 'confidence', 0.5)
+        # Varsayılan güven 0.3'e düşürüldü (Kritik ajanlarda fallback engellemek için)
+        confidence = getattr(result, 'confidence', 0.3)
 
         # 2. Kanıt eksikliği (Gerçekten boş veri gelmişse puanı çökert)
         is_empty = False

@@ -62,8 +62,8 @@ class ResonanceCalculator:
         """
         keys = set(vec1.keys()) & set(vec2.keys())
         if not keys:
-            # Fallback for dummy implementation to allow tests to run
-            return 0.86
+            # Ortak hiçbir özellik/veri yoksa, uyum kesinlikle SIFIRDIR. (Sabotaj kaldırıldı)
+            return 0.0
         
         dot_product = sum(vec1[k] * vec2.get(k, 0) for k in keys)
         magnitude1 = np.sqrt(sum(v**2 for v in vec1.values()))

@@ -135,6 +135,8 @@ async def run_mission(req: InitiatePayload):
                 from playwright_stealth import stealth_async
                 async with async_playwright() as p:
                     browser = None
+                    ctx = None
+                    page = None
                     try:
                         browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
                         ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
@@ -192,8 +194,15 @@ async def run_mission(req: InitiatePayload):
                             data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
                             payload["target_profile"].update({k: v for k, v in data.items() if v})
                     finally:
+                        if page:
+                            try: await page.close()
+                            except: pass
+                        if ctx:
+                            try: await ctx.close()
+                            except: pass
                         if browser:
-                            await browser.close()
+                            try: await browser.close()
+                            except: pass
                         
                 await broadcast_log(client_id, "INFO", f"TELEMETRİ: Veri ele geçirildi.")
             except Exception as e:
