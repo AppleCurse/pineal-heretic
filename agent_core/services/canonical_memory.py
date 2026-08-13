@@ -1,7 +1,7 @@
 import json
 import os
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 
 class ProfileMemory(BaseModel):
@@ -42,7 +42,7 @@ class CanonicalMemory:
         with open(profile_file, 'w') as f:
             json.dump({
                 'task_id': task_id,
-                'last_updated': datetime.utcnow().isoformat(),
+                'last_updated': datetime.now(timezone.utc).isoformat(),
                 'evidence': merged,
                 'confidence': self._calculate_overall_confidence(merged)
             }, f, indent=2)

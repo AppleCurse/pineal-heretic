@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Dict, Any
 
 class RoutePlan(BaseModel):
@@ -6,8 +6,7 @@ class RoutePlan(BaseModel):
     reasoning: str
     priority: int  # 1: Kritik, 2: Normal, 3: Opsiyonel
     
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class CognitiveRouter:
     """
@@ -28,6 +27,9 @@ class CognitiveRouter:
         
         # Hedef varsa analiz et
         if has_target:
+            agents.append('autonomous_verifier')
+            reasoning.append("Otonom Teyit (Ayna)")
+            
             agents.append('human_behavior')
             reasoning.append("Hedef mikro-analizi")
             

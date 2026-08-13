@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict
 import cv2
 import numpy as np
@@ -19,9 +19,7 @@ class DigitalColdReading(BaseModel):
     achilles_score: float  # 0-100
     resonance_potential: float
     
-    class Config:
-        # Tip güvenliği için ekstra kısıtlama
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class HumanBehaviorAnalyzer:
     """

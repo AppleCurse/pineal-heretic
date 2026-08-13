@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any
 
 class UncertaintyReport(BaseModel):
@@ -6,8 +6,7 @@ class UncertaintyReport(BaseModel):
     confidence: float
     reason: str
     
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class UncertaintyEngine:
     """

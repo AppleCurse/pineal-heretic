@@ -1,5 +1,5 @@
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Tuple
 
 class ResonanceProfile(BaseModel):
@@ -8,8 +8,7 @@ class ResonanceProfile(BaseModel):
     recommended_approach: str
     red_flags: list  # Uyumsuzluk işaretleri
     
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class ResonanceCalculator:
     """

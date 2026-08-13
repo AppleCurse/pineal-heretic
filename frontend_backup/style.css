@@ -1,0 +1,286 @@
+/* GLOBAL RESET */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #030303;
+    color: #E0E0E0;
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* TYPOGRAPHY */
+h1, h2, h3, h4 {
+    color: #FFFFFF;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+/* TOP HUD */
+.hud-panel {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    border-bottom: 1px solid #222;
+    padding-bottom: 15px;
+    margin-bottom: 30px;
+    gap: 15px;
+}
+
+.telemetry-box {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border: 1px solid #333;
+    padding: 8px 16px;
+    background: #0A0A0A;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.led {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+.led-on { background: #D4AF37; box-shadow: 0 0 8px #D4AF37; }
+.led-off { background: #333; }
+
+.mission-warning {
+    margin-left: auto;
+    color: #F85149;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 1.1rem;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+/* MAIN GRID */
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    gap: 30px;
+}
+
+/* PANELS */
+.panel {
+    background: transparent;
+}
+.panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #D4AF37;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 8px;
+}
+
+/* INPUTS */
+.input-group {
+    margin-bottom: 15px;
+}
+.input-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: #B0B0B0;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+input[type="text"], input[type="password"], textarea {
+    width: 100%;
+    background: #0A0A0A;
+    border: 1px solid #333;
+    color: #FFF;
+    font-family: 'Inter', sans-serif;
+    padding: 12px;
+    border-radius: 4px;
+    outline: none;
+    transition: all 0.2s;
+}
+input:focus, textarea:focus {
+    border-color: #D4AF37;
+    box-shadow: 0 0 10px rgba(212,175,55,0.1);
+}
+textarea { resize: vertical; }
+
+.slider-group { margin-bottom: 20px; }
+.slider-group label { display: block; font-size: 0.85rem; color: #B0B0B0; margin-bottom: 8px; font-weight: 600; }
+input[type="range"] { width: 100%; accent-color: #D4AF37; }
+
+/* CENTER ACTION BAR */
+.action-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+.target-input {
+    flex-grow: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+}
+.fire-btn {
+    background: #1A0505;
+    border: 1px solid #F85149;
+    color: #F85149;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 800;
+    padding: 0 30px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.fire-btn:hover {
+    background: #F85149;
+    color: #000;
+    box-shadow: 0 0 20px rgba(248,81,73,0.5);
+}
+
+/* RADAR */
+.radar-container {
+    background: #050505;
+    border: 1px solid #222;
+    border-top: 3px solid #D4AF37;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+    margin-bottom: 20px;
+}
+.radar-logs {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+}
+.radar-footer {
+    border-top: 1px solid #111;
+    padding: 8px 15px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: #A0A0A0;
+}
+.log-INFO { color: #A0A0A0; margin-bottom: 4px; }
+.log-WARNING { color: #D4AF37; margin-bottom: 4px; }
+.log-ERROR { color: #F85149; margin-bottom: 4px; }
+.log-ts { opacity: 0.6; margin-right: 8px; }
+
+/* CARDS */
+.results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+.card {
+    background: #0A0A0A;
+    border: 1px solid #222;
+    border-left: 4px solid #D4AF37;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.card-title {
+    font-weight: 800;
+    color: #FFF;
+    margin-bottom: 10px;
+    font-size: 1rem;
+}
+.card-red { border-left-color: #F85149; }
+.card-red .card-title { color: #F85149; }
+
+.hook-card {
+    grid-column: 1 / -1;
+    background: #050505;
+    border: 1px solid #D4AF37;
+    padding: 20px;
+    border-radius: 4px;
+}
+.hook-text {
+    font-family: 'JetBrains Mono', monospace;
+    color: #D4AF37;
+    margin: 15px 0;
+    font-size: 1rem;
+}
+.copy-btn {
+    background: #D4AF37;
+    color: #000;
+    border: none;
+    padding: 8px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.halt-card {
+    grid-column: 1 / -1;
+    background: #1A0505;
+    border: 1px solid #F85149;
+    padding: 20px;
+    text-align: center;
+    color: #F85149;
+    font-weight: 800;
+    font-size: 1.2rem;
+    border-radius: 4px;
+}
+
+/* VAULT SECTION */
+.vault-box {
+    background: #080808;
+    border: 1px solid #1A1A1A;
+    padding: 20px;
+    border-radius: 4px;
+}
+.vault-box h3 {
+    font-size: 0.9rem;
+    color: #FFF;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 8px;
+}
+.inline-action {
+    display: flex;
+    gap: 10px;
+}
+.mini-btn {
+    background: #111;
+    border: 1px solid #444;
+    color: #FFF;
+    padding: 0 15px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.mini-btn:hover { background: #222; border-color: #666; }
+
+.seal-btn {
+    width: 100%;
+    background: #050505;
+    border: 1px solid #D4AF37;
+    color: #D4AF37;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    padding: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+.seal-btn:hover { background: #D4AF37; color: #000; }

@@ -1,7 +1,7 @@
 import asyncio, os, tempfile, traceback
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     from agent_core.services.cognitive_router import CognitiveRouter, RoutePlan
@@ -13,6 +13,8 @@ try:
     from agent_core.agents.resonance_calculator import ResonanceCalculator
     from agent_core.agents.pattern_interrupt import PatternInterrupt
     from agent_core.services.memory_injector import MemoryInjector
+    from agent_core.services.search_engine import SearchEngine
+    from agent_core.agents.autonomous_verifier import AutonomousVerifier
 except Exception:
     from services.cognitive_router import CognitiveRouter, RoutePlan
     from services.canonical_memory import CanonicalMemory
@@ -23,6 +25,8 @@ except Exception:
     from agents.resonance_calculator import ResonanceCalculator
     from agents.pattern_interrupt import PatternInterrupt
     from services.memory_injector import MemoryInjector
+    from services.search_engine import SearchEngine
+    from agents.autonomous_verifier import AutonomousVerifier
 
 class InsufficientEvidenceError(RuntimeError):
     pass
@@ -46,11 +50,13 @@ class PinealExecutor:
         self.injector = MemoryInjector()
         self.uncertainty = UncertaintyEngine()
         self.llm_gateway = LLMGateway()
+        self.search_engine = SearchEngine()
         self.agents = {
             "human_behavior": HumanBehaviorAnalyzer(),
             "mirror_truth": MirrorOfTruth(),
             "resonance_calc": ResonanceCalculator(),
             "pattern_interrupt": PatternInterrupt(),
+            "autonomous_verifier": AutonomousVerifier(self.search_engine),
         }
 
     async def _download_images(self, urls: List[str]) -> List[str]:
@@ -99,7 +105,7 @@ class PinealExecutor:
         return VerifiedNote(note=verified)
 
     async def execute_task(self, input_data: Dict[str, Any], task_id: str) -> TaskStatus:
-        status = TaskStatus(task_id=task_id, status="pending", created_at=datetime.utcnow())
+        status = TaskStatus(task_id=task_id, status="pending", created_at=datetime.now(timezone.utc))
         status.status = "processing"
 
         # Kutsal Kuralları (Hafıza) Enjekte Et
@@ -150,7 +156,7 @@ class PinealExecutor:
                     input_data["target_analysis"] = result.dict() if hasattr(result, 'dict') else result.model_dump()
                     input_data["target_authentic_vector"] = {"depth": 0.8, "energy": 0.4}
 
-                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.utcnow().isoformat()})
+                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
 
                 if agent_name == "resonance_calc" and result.compatibility_score < 0.70:
                     self._log("ERROR", "[" + task_id + "] FREKANS UYUSMAZLIGI: " + str(round(result.compatibility_score, 2)))
@@ -162,11 +168,11 @@ class PinealExecutor:
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
                 result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
-                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.utcnow().isoformat()})
+                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
                 self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
 
             status.status = "completed"
-            status.completed_at = datetime.utcnow()
+            status.completed_at = datetime.now(timezone.utc)
             await self.memory.merge_evidence(task_id, status.evidence_chain)
             self._log("INFO", "[" + task_id + "] TAMAMLANDI. Kanit adimi: " + str(len(status.evidence_chain)))
 

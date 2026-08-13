@@ -1,16 +1,21 @@
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from pydantic import BaseModel, ConfigDict
+from typing import Dict, Any, Optional, List
 import random
+
+class ScenarioResponse(BaseModel):
+    scenario_type: str  # "agresif", "savunmaci", "ilgili"
+    expected_target_reaction: str
+    our_counter_move: str
 
 class GeneratedMessage(BaseModel):
     message: str
     strategy: str
     confidence: float
     compliance_score: float  # 0.0 - 100.0 (Kutsal Kural ihlal skoru)
-    follow_up: Optional[str]  # Yanıt gelirse devamı, ama bekleme
+    dialogue_tree: List[ScenarioResponse]
+
     
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class PatternInterrupt:
     """
@@ -56,11 +61,13 @@ class PatternInterrupt:
         
         prompt = (
             f"Sen 'Pattern Interrupt' ajanısın. Görevin, beklentileri kıran ve hedefte yankı uyandıran tek bir açılış cümlesi üretmek.\n"
+            f"Bununla yetinmeyeceksin; satranç oynar gibi hedefin bu kancaya verebileceği 3 olası tepkiyi (Agresif, Savunmacı, İlgili) öngörüp, 2. ve 3. hamleleri (counter-moves) önceden hazırlayacaksın.\n"
             f"Asla reaktif olma, boşluk bırak, soru sorma.\n\n"
             f"Hedef Analizi: {target_analysis}\n"
             f"Kullanıcı Gerçeği: {user_truth}\n\n"
             f"{sacred_rules}\n\n"
-            f"Beklenen JSON formatında çıktını üret. 'message' alanı senin nihai mesajındır.\n"
+            f"Beklenen JSON formatında çıktını üret. 'message' alanı senin nihai açılış mesajındır.\n"
+            f"'dialogue_tree' listesi içinde 3 farklı senaryo ('agresif', 'savunmaci', 'ilgili') için öngörülerini ve karşı-hamlelerini ('our_counter_move') tanımla.\n"
             f"'compliance_score' alanında ise bu mesajın Kutsal Kurallara (varsa) yüzde kaç (0-100) oranında uyduğunu değerlendir."
         )
         

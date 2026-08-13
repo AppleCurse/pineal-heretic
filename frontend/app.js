@@ -177,6 +177,7 @@ document.getElementById("btn-fire").addEventListener("click", async () => {
   document.getElementById("btn-fire").disabled = true;
   const aggressiveness = parseFloat(knobThrottle.value) / 100;
   const evidence_th = parseInt(knobProp.value, 10);
+  const scraper_type = document.querySelector('input[name="scraper_src"]:checked').value;
   const payload = {
     client_id,
     url: document.getElementById("inp-target-url").value.trim(),
@@ -185,6 +186,7 @@ document.getElementById("btn-fire").addEventListener("click", async () => {
     envies: document.getElementById("inp-envies").value.trim(),
     aggressiveness,
     evidence_th,
+    scraper_type,
   };
   try {
     const res = await fetch(`${API_URL}/api/initiate`, {

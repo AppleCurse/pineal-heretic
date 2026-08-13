@@ -18,6 +18,11 @@ try:
 except Exception:
     scrape_readonly = None
 
+try:
+    from agent_core.scraper.instagram_ghost import InstagramGhostScraper, InsufficientEvidenceError
+except Exception:
+    InstagramGhostScraper = None
+
 app = FastAPI(title="PINEAL-HERETIC v2.0 API")
 
 app.add_middleware(
@@ -84,6 +89,7 @@ class InitiatePayload(BaseModel):
     envies: str
     aggressiveness: float
     evidence_th: int
+    scraper_type: str = "x"
 
 async def run_mission(req: InitiatePayload):
     client_id = req.client_id
@@ -101,14 +107,70 @@ async def run_mission(req: InitiatePayload):
         }
         
         cookie = vault.get("x_cookie")
-        if req.url and scrape_readonly:
-            await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url}")
+        if req.url:
+            await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url} [{req.scraper_type.upper()}]")
             try:
-                data = scrape_readonly(req.url, cookies=cookie)
-                payload["target_profile"].update({k: v for k, v in data.items() if v})
-                await broadcast_log(client_id, "INFO", f"TELEMETRİ: {len(data.get('posts', []))} gönderi ele geçirildi.")
+                from playwright.async_api import async_playwright
+                async with async_playwright() as p:
+                    browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                    ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                    
+                    if req.scraper_type == "instagram" and InstagramGhostScraper:
+                        ctx = await browser.new_context(**ctx_kwargs)
+                        if cookie:
+                            parsed = []
+                            for part in cookie.split(";"):
+                                if "=" in part:
+                                    k, v = part.split("=", 1)
+                                    parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
+                            if parsed:
+                                await ctx.add_cookies(parsed)
+                        
+                        page = await ctx.new_page()
+                        ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
+                        ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
+                        
+                        payload["target_profile"].update({
+                            "username": "@" + ig_data.username,
+                            "bio": ig_data.biography or "",
+                            "posts": [p.caption for p in ig_data.posts if p.caption],
+                            "images": [p.display_url for p in ig_data.posts],
+                            "followers": ig_data.follower_count or 0,
+                            "is_private": ig_data.is_private
+                        })
+                        
+                    elif req.scraper_type == "cross" and scrape_readonly and InstagramGhostScraper:
+                        # Scrape X (runs sync via thread)
+                        x_data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
+                        
+                        # Scrape IG
+                        ctx = await browser.new_context(**ctx_kwargs)
+                        if cookie:
+                            parsed = []
+                            for part in cookie.split(";"):
+                                if "=" in part:
+                                    k, v = part.split("=", 1)
+                                    parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
+                            if parsed:
+                                await ctx.add_cookies(parsed)
+                        page = await ctx.new_page()
+                        ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
+                        ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
+                        
+                        merged = x_data.copy()
+                        merged["posts"] = x_data.get("posts", []) + [p.caption for p in ig_data.posts if p.caption]
+                        merged["images"] = x_data.get("images", []) + [p.display_url for p in ig_data.posts]
+                        payload["target_profile"].update({k: v for k, v in merged.items() if v})
+                        
+                    elif scrape_readonly:
+                        data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
+                        payload["target_profile"].update({k: v for k, v in data.items() if v})
+                        
+                await broadcast_log(client_id, "INFO", f"TELEMETRİ: Veri ele geçirildi.")
             except Exception as e:
                 await broadcast_log(client_id, "ERROR", f"UPLINK KOPTU: {str(e)[:100]}")
+                if "InsufficientEvidenceError" in type(e).__name__ or "TargetPrivateError" in type(e).__name__:
+                    raise e
         
         task_id = f"op_{datetime.now().strftime('%H%M%S')}"
         for attempt in range(1, 4):
@@ -173,6 +235,9 @@ class VaultPayload(BaseModel):
     client_id: str
     x_cookie: str = ""
     api_key: str = ""
+    tavily_key: str = ""
+    serpapi_key: str = ""
+    exa_key: str = ""
     
 @app.post("/api/vault")
 async def api_vault(req: VaultPayload):
@@ -185,6 +250,12 @@ async def api_vault(req: VaultPayload):
         executor.llm_gateway.set_key(req.api_key)
         vault["or_key"] = True
         await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
+        
+    if req.tavily_key or req.serpapi_key or req.exa_key:
+        executor.search_engine.set_keys(tavily=req.tavily_key, serpapi=req.serpapi_key, exa=req.exa_key)
+        vault["search_keys"] = True
+        await broadcast_log(req.client_id, "INFO", "KASA: Arama Motoru anahtarları mühürlendi.")
+        
     return {"status": "secured"}
 
 class OverridePayload(BaseModel):
@@ -213,7 +284,8 @@ async def api_telemetry(client_id: str):
         "core": True,
         "gateway": getattr(executor.llm_gateway, 'api_key', None) is not None,
         "scraper": scrape_readonly is not None,
-        "vault": "x_cookie" in vault
+        "vault": "x_cookie" in vault,
+        "search_engine": vault.get("search_keys", False)
     }
 
 os.makedirs("frontend", exist_ok=True)

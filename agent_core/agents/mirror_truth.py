@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any
 
 class MirrorReflection(BaseModel):
@@ -7,8 +7,7 @@ class MirrorReflection(BaseModel):
     alignment_score: float      # Uyum skoru (0-1)
     authentic_anchors: list   # Gerçekliğin sabit noktaları
     
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
 class MirrorOfTruth:
     """

@@ -68,7 +68,7 @@ class LLMGateway:
         full_prompt = (
             f"{prompt}\n\n"
             f"Lütfen çıktını SADECE aşağıdaki JSON formatında ver. Markdown etiketi kullanma, hiçbir ek açıklama yapma:\n"
-            f"{schema.schema_json()}"
+            f"{json.dumps(schema.model_json_schema())}"
         )
         
         try:
@@ -79,7 +79,7 @@ class LLMGateway:
             # 1 Kez Repair (Tamir) İsteği
             repair_prompt = (
                 f"Önceki çıktın geçerli bir JSON değildi veya format uymuyordu. "
-                f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{schema.schema_json()}\n"
+                f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{json.dumps(schema.model_json_schema())}\n"
                 f"Eklediğin bozuk çıktı şuydu:\n{response_text[:200]}"
             )
             repair_text = await self.query(repair_prompt, temperature, model)
