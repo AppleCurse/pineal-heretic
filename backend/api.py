@@ -118,11 +118,21 @@ async def run_mission(req: InitiatePayload):
             "target_profile": {"bio": "", "posts": [], "post_times": [], "images": []}
         }
         
-        cookie = vault.get("x_cookie")
+        # Otonom Cookie Rotasyonu
+        cookie = ""
+        cookie_pool = vault.get("x_cookie", "").strip()
+        if cookie_pool:
+            cookie_list = [c.strip() for c in cookie_pool.split('\n') if c.strip()]
+            if cookie_list:
+                import random
+                cookie = random.choice(cookie_list)
+                await broadcast_log(client_id, "INFO", f"DAEMON: Rotasyondan rastgele cookie seçildi.")
+                
         if req.url:
             await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url} [{req.scraper_type.upper()}]")
             try:
                 from playwright.async_api import async_playwright
+                from playwright_stealth import stealth_async
                 async with async_playwright() as p:
                     browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
                     ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
@@ -139,6 +149,7 @@ async def run_mission(req: InitiatePayload):
                                 await ctx.add_cookies(parsed)
                         
                         page = await ctx.new_page()
+                        await stealth_async(page)
                         ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                         ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                         
@@ -166,6 +177,7 @@ async def run_mission(req: InitiatePayload):
                             if parsed:
                                 await ctx.add_cookies(parsed)
                         page = await ctx.new_page()
+                        await stealth_async(page)
                         ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                         ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                         

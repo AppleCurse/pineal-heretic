@@ -231,8 +231,9 @@ function renderResults(data) {
 document.getElementById("btn-save-cookie").addEventListener("click", async () => {
   const val = document.getElementById("inp-cookie").value;
   if (!val) return;
+  // Multiple cookies can be sent as is, they will be parsed in backend
   await fetch(`${API_URL}/api/vault`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ client_id, x_cookie: val, api_key: "" }) });
-  appendLog(ts(), "INFO", "KASA: Cookie mühürlendi");
+  appendLog(ts(), "INFO", "KASA: Cookie(ler) mühürlendi");
   checkTelemetry();
 });
 document.getElementById("btn-save-apikey").addEventListener("click", async () => {
