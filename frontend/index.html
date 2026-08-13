@@ -1,111 +1,256 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PINEAL-HERETIC v2.0 - COMMAND CENTER</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PINEAL-HERETIC v2.0 — SIGINT CONSOLE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <!-- TOP HUD -->
-    <header class="hud-panel">
-        <div class="telemetry-box" id="tel-core"><span class="led led-off" id="led-core"></span> ÇEKİRDEK MOTOR</div>
-        <div class="telemetry-box" id="tel-gw"><span class="led led-off" id="led-gw"></span> LLM AĞ GEÇİDİ</div>
-        <div class="telemetry-box" id="tel-scraper"><span class="led led-off" id="led-scraper"></span> KAZIYICI DÜĞÜM</div>
-        <div class="telemetry-box" id="tel-vault"><span class="led led-off" id="led-vault"></span> GİZLİ KASA</div>
-        <div class="mission-warning" id="mission-warning" style="display: none;">⚠️ OPERASYON SÜRÜYOR</div>
-    </header>
+  <div class="bg-layer"></div>
+  <div class="vignette"></div>
 
-    <!-- MAIN GRID -->
-    <main class="grid-container">
-        
-        <!-- LEFT: FLIGHT COMPUTER -->
-        <section class="panel panel-left">
-            <h2 class="panel-title">01 // UÇUŞ BİLGİSAYARI (PARAMETRELER)</h2>
-            <div class="input-group">
-                <label>Özel Ritüellerin</label>
-                <input type="text" id="inp-rituals" value="çay, kitap, karanlık">
-            </div>
-            <div class="input-group">
-                <label>Gece Playlist</label>
-                <input type="text" id="inp-playlist" value="neşet ertaş">
-            </div>
-            <div class="input-group">
-                <label>Gizli İsteklerin</label>
-                <input type="text" id="inp-envies" value="anlaşılmak, sadakat">
-            </div>
+  <div class="console-wrapper">
+    <!-- ===== LUXURY CONSOLE PANEL ===== -->
+    <div class="console-panel">
+      <div class="panel-edge top"></div>
+      <div class="panel-edge bottom"></div>
+      <div class="corner-ornament tl"></div>
+      <div class="corner-ornament tr"></div>
 
-            <h2 class="panel-title" style="margin-top: 30px;">SİSTEM LİMİTLERİ</h2>
-            <div class="slider-group">
-                <label>Yaratıcılık / Agresiflik (<span id="val-temp">0.7</span>)</label>
-                <input type="range" id="inp-temp" min="0" max="1" step="0.1" value="0.7">
-            </div>
-            <div class="slider-group">
-                <label>Kanıt Eşiği (Katılık) (<span id="val-ev">2</span>)</label>
-                <input type="range" id="inp-ev" min="1" max="5" step="1" value="2">
-            </div>
-        </section>
+      <div class="title-plate">
+        <div class="title-main">PINEAL-HERETIC v2.0</div>
+        <div class="title-sub">SIGINT CONSOLE</div>
+      </div>
 
-        <!-- CENTER: RADAR & ACTION -->
-        <section class="panel panel-center">
-            <h2 class="panel-title">02 // TAKTİK RADAR VE ATEŞLEME</h2>
-            
-            <div class="action-bar">
-                <input type="text" id="inp-target-url" placeholder="https://x.com/hedef_kisi" class="target-input">
-                <button id="btn-fire" class="fire-btn">🔥 ATEŞLE</button>
+      <div class="gauges-row">
+        <div class="gauge" data-id="core">
+          <div class="gauge-face">
+            <div class="gauge-scale"></div>
+            <div class="gauge-needle" id="needle-core" style="--angle: -90deg"></div>
+            <div class="gauge-center"></div>
+          </div>
+          <div class="gauge-label">CORE ENGINE</div>
+          <div class="gauge-sub" id="sub-core">THERMAL • —</div>
+        </div>
+        <div class="gauge" data-id="gateway">
+          <div class="gauge-face">
+            <div class="gauge-scale"></div>
+            <div class="gauge-needle" id="needle-gateway" style="--angle: -90deg"></div>
+            <div class="gauge-center"></div>
+          </div>
+          <div class="gauge-label">LLM GATEWAY</div>
+          <div class="gauge-sub" id="sub-gateway">HANDSHAKE • —</div>
+        </div>
+        <div class="gauge" data-id="scraper">
+          <div class="gauge-face">
+            <div class="gauge-scale"></div>
+            <div class="gauge-needle" id="needle-scraper" style="--angle: -90deg"></div>
+            <div class="gauge-center"></div>
+          </div>
+          <div class="gauge-label">SCRAPER NODE</div>
+          <div class="gauge-sub" id="sub-scraper">TR POOL • —</div>
+        </div>
+      </div>
+
+      <div class="knobs-row">
+        <div class="knob-group">
+          <label>THROTTLE</label>
+          <input type="range" id="knob-throttle" min="0" max="100" value="70" />
+          <span class="knob-val" id="val-throttle">70</span>
+        </div>
+        <div class="knob-group">
+          <label>MIXTURE</label>
+          <input type="range" id="knob-mixture" min="0" max="100" value="60" />
+          <span class="knob-val" id="val-mixture">60</span>
+        </div>
+        <div class="knob-group">
+          <label>PROP</label>
+          <input type="range" id="knob-prop" min="1" max="5" value="2" />
+          <span class="knob-val" id="val-prop">2</span>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="estop-group">
+          <div class="estop-cover" id="estop-cover" title="Lift cover">
+            <span>LIFT</span>
+          </div>
+          <button class="estop-btn" id="btn-estop" disabled title="Emergency Stop">STOP</button>
+          <div class="estop-label">EMERGENCY STOP</div>
+        </div>
+
+        <div class="toggles">
+          <button class="toggle" data-key="power" data-on="1">
+            <span class="toggle-led"></span>
+            <span class="toggle-label">POWER</span>
+          </button>
+          <button class="toggle" data-key="arm" data-on="0">
+            <span class="toggle-led"></span>
+            <span class="toggle-label">ARM</span>
+          </button>
+          <button class="toggle" data-key="record" data-on="0">
+            <span class="toggle-led"></span>
+            <span class="toggle-label">RECORD</span>
+          </button>
+          <button class="toggle" data-key="sigint" data-on="1">
+            <span class="toggle-led"></span>
+            <span class="toggle-label">SIGINT</span>
+          </button>
+        </div>
+
+        <div class="keylock-group">
+          <button class="keylock" id="btn-keylock" data-locked="1" title="Key Lock">
+            <div class="key-body"></div>
+          </button>
+          <div class="keylock-label">KEY LOCK</div>
+          <div class="keylock-state" id="key-state">AES-256</div>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-left">
+          <span class="status-led" id="status-led"></span>
+          <span class="status-text" id="status-text">STATUS: ACTIVE</span>
+        </div>
+        <div class="status-right">
+          <span class="rec-label">SIGINT FEED</span>
+          <span class="rec-value" id="rec-counter">REC:0000</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ops-deck">
+      <section class="ops-panel">
+        <h2 class="ops-title">01 // FREKANS (KULLANICI)</h2>
+        <div class="field">
+          <label>Özel Ritüeller</label>
+          <input type="text" id="inp-rituals" value="çay, kitap, karanlık, yalnız yürüyüş" />
+        </div>
+        <div class="field">
+          <label>Gece Playlist</label>
+          <input type="text" id="inp-playlist" value="neşet ertaş - gönül dağı" />
+        </div>
+        <div class="field">
+          <label>Gizli İstekler</label>
+          <input type="text" id="inp-envies" value="anlaşılmak, derin bağlantı" />
+        </div>
+      </section>
+
+      <section class="ops-panel ops-center">
+        <h2 class="ops-title">02 // TAKTİK RADAR</h2>
+        <div class="fire-row">
+          <input type="text" id="inp-target-url" class="target-url" placeholder="https://x.com/hedef_kisi" />
+          <button id="btn-fire" class="fire-btn">🔥 ATEŞLE</button>
+        </div>
+
+        <div class="radar-box">
+          <div id="radar-logs" class="radar-logs"></div>
+          <div class="radar-footer">
+            <span id="radar-tx">BAĞLANTI BEKLENİYOR…</span>
+            <span id="mission-flag" class="mission-flag hidden">OPERASYON SÜRÜYOR</span>
+          </div>
+        </div>
+
+        <div id="results-container" class="results-grid"></div>
+      </section>
+
+      <section class="ops-panel">
+        <h2 class="ops-title">03 // GİZLİ KASA</h2>
+        <div class="vault-block">
+          <div class="field">
+            <label>X Cookie</label>
+            <div class="inline">
+              <input type="password" id="inp-cookie" placeholder="auth_token=…" />
+              <button id="btn-save-cookie" class="mini-btn">KİLİTLE</button>
             </div>
-
-            <div class="radar-container">
-                <div id="radar-logs" class="radar-logs">
-                    <!-- Logs injected via JS -->
-                </div>
-                <div class="radar-footer">▮ <span id="radar-tx"></span></div>
+          </div>
+          <div class="field">
+            <label>OpenRouter API Key</label>
+            <div class="inline">
+              <input type="password" id="inp-apikey" placeholder="sk-or-v1-…" />
+              <button id="btn-save-apikey" class="mini-btn">ATEŞLE</button>
             </div>
+          </div>
+        </div>
 
-            <div id="results-container" class="results-grid">
-                <!-- Cards injected via JS -->
+        <div class="vault-block" style="margin-top:18px">
+          <h3 class="ops-sub">HAFIZA OVERRIDE</h3>
+          <div class="field">
+            <label>Kutsal Kural / Dealbreaker</label>
+            <textarea id="inp-fact" rows="3" placeholder="Asla 'pozitif enerji' veya emoji spam kullanma…"></textarea>
+          </div>
+          <div class="field">
+            <label>Etiket</label>
+            <input type="text" id="inp-tag" value="dealbreaker_authenticity" />
+          </div>
+          <button id="btn-seal" class="seal-btn">BEYNE KAZI (SEAL)</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="intercom-panel">
+      <div class="intercom-header">
+        <div class="intercom-title">
+          <span class="intercom-led" id="intercom-led"></span>
+          RESONANCE INTERCOM — HERETIC CHANNEL
+        </div>
+        <div class="intercom-badge">VOICE TO TEXT • 1947 MODEL</div>
+      </div>
+
+      <div class="intercom-body">
+        <div class="intercom-left">
+          <div class="vu-meter">
+            <div class="vu-scale">
+              <span>-20</span><span>0</span><span>+3</span>
             </div>
-        </section>
+            <div class="vu-needle" id="vu-needle" style="--vu: -40deg"></div>
+            <div class="vu-pivot"></div>
+            <div class="vu-label">VU</div>
+          </div>
 
-        <!-- RIGHT: VAULT & OVERRIDE -->
-        <section class="panel panel-right">
-            <h2 class="panel-title">03 // GİZLİ KASA VE HAFIZA</h2>
-            
-            <div class="vault-box">
-                <h3>🔑 GEÇİCİ ANAHTARLIK (VAULT)</h3>
-                <div class="input-group">
-                    <label>X (Twitter) Cookie</label>
-                    <div class="inline-action">
-                        <input type="password" id="inp-cookie" placeholder="auth_token=...">
-                        <button id="btn-save-cookie" class="mini-btn">ÇEREZİ KİLİTLE</button>
-                    </div>
-                </div>
-                <div class="input-group" style="margin-top: 15px;">
-                    <label>OpenRouter API Anahtarı</label>
-                    <div class="inline-action">
-                        <input type="password" id="inp-apikey" placeholder="sk-or-v1-...">
-                        <button id="btn-save-apikey" class="mini-btn">ANAHTARI ATEŞLE</button>
-                    </div>
-                </div>
+          <div class="mic-stand">
+            <div class="mic-rod"></div>
+            <div class="mic-head">
+              <div class="mic-grille"></div>
+              <div class="mic-band"></div>
+              <div class="mic-model">RCA-44</div>
             </div>
+          </div>
 
-            <div class="vault-box" style="margin-top: 20px;">
-                <h3>💉 HAFIZAYA MÜDAHALE (OVERRIDE)</h3>
-                <div class="input-group">
-                    <label>Yıkılamaz Kural / Öğreti</label>
-                    <textarea id="inp-fact" rows="3" placeholder="Hedefle asla zayıflık üzerinden konuşma..."></textarea>
-                </div>
-                <div class="input-group">
-                    <label>Etiket</label>
-                    <input type="text" id="inp-tag" value="dealbreaker">
-                </div>
-                <button id="btn-seal" class="seal-btn">BEYNE KAZI (SEAL)</button>
-            </div>
-        </section>
+          <button id="btn-ptt" class="ptt-btn" title="Push to Resonate">
+            <span class="ptt-dot" id="ptt-dot"></span>
+            <span class="ptt-line1">PUSH TO</span>
+            <span class="ptt-line2">RESONATE</span>
+            <span class="ptt-hint" id="ptt-hint">HOLD • SPEAK</span>
+          </button>
 
-    </main>
+          <div class="ptt-bars" id="ptt-bars">
+            <span class="ptt-standby">STANDBY — PRESS PTT</span>
+          </div>
+        </div>
 
-    <script src="app.js"></script>
+        <div class="intercom-right">
+          <div id="chat-scroll" class="chat-scroll"></div>
+          <div class="chat-compose">
+            <input type="text" id="chat-input" placeholder="Mesajı daktilo et veya PTT ile rezonans gönder…" />
+            <button id="btn-chat-send" class="chat-send">SEND</button>
+            <button id="btn-chat-ptt" class="chat-ptt-mini" title="Push to Resonate">●</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-motto">
+      <span class="dot"></span>
+      DERDIMIZ OPERASYON BAŞLATMAK DEĞİL — KUSURSUZU YAKALAMAK
+      <span class="dot"></span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
