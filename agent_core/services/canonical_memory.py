@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -22,6 +23,7 @@ class CanonicalMemory:
     def __init__(self, storage_path: str = "./memory/"):
         self.storage_path = storage_path
         os.makedirs(storage_path, exist_ok=True)
+        self._lock = asyncio.Lock()
     
     async def merge_evidence(self, task_id: str, evidence_chain: List[Dict]):
         """
@@ -29,23 +31,24 @@ class CanonicalMemory:
         """
         profile_file = os.path.join(self.storage_path, f"{task_id}.json")
         
-        # Mevcut veriyi oku
-        existing = {}
-        if os.path.exists(profile_file):
-            with open(profile_file, 'r') as f:
-                existing = json.load(f)
-        
-        # Yeni kanıtları ekle (Çelişki kontrolü ile)
-        merged = self._resolve_conflicts(existing.get('evidence', []), evidence_chain)
-        
-        # Kaydet
-        with open(profile_file, 'w') as f:
-            json.dump({
-                'task_id': task_id,
-                'last_updated': datetime.now(timezone.utc).isoformat(),
-                'evidence': merged,
-                'confidence': self._calculate_overall_confidence(merged)
-            }, f, indent=2)
+        async with self._lock:
+            # Mevcut veriyi oku
+            existing = {}
+            if os.path.exists(profile_file):
+                with open(profile_file, 'r') as f:
+                    existing = json.load(f)
+            
+            # Yeni kanıtları ekle (Çelişki kontrolü ile)
+            merged = self._resolve_conflicts(existing.get('evidence', []), evidence_chain)
+            
+            # Kaydet
+            with open(profile_file, 'w') as f:
+                json.dump({
+                    'task_id': task_id,
+                    'last_updated': datetime.now(timezone.utc).isoformat(),
+                    'evidence': merged,
+                    'confidence': self._calculate_overall_confidence(merged)
+                }, f, indent=2)
     
     def _resolve_conflicts(self, old: List[Dict], new: List[Dict]) -> List[Dict]:
         """

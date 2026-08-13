@@ -59,12 +59,15 @@ class PatternInterrupt:
         user_truth = input_data.get('user_mirror', {})
         sacred_rules = input_data.get('sacred_rules', "")
         
+        target_json = target_analysis.model_dump_json(indent=2) if hasattr(target_analysis, 'model_dump_json') else str(target_analysis)
+        user_json = user_truth.model_dump_json(indent=2) if hasattr(user_truth, 'model_dump_json') else str(user_truth)
+        
         prompt = (
             f"Sen 'Pattern Interrupt' ajanısın. Görevin, beklentileri kıran ve hedefte yankı uyandıran tek bir açılış cümlesi üretmek.\n"
             f"Bununla yetinmeyeceksin; satranç oynar gibi hedefin bu kancaya verebileceği 3 olası tepkiyi (Agresif, Savunmacı, İlgili) öngörüp, 2. ve 3. hamleleri (counter-moves) önceden hazırlayacaksın.\n"
             f"Asla reaktif olma, boşluk bırak, soru sorma.\n\n"
-            f"Hedef Analizi: {target_analysis}\n"
-            f"Kullanıcı Gerçeği: {user_truth}\n\n"
+            f"Hedef Analizi:\n{target_json}\n\n"
+            f"Kullanıcı Gerçeği:\n{user_json}\n\n"
             f"{sacred_rules}\n\n"
             f"Beklenen JSON formatında çıktını üret. 'message' alanı senin nihai açılış mesajındır.\n"
             f"'dialogue_tree' listesi içinde 3 farklı senaryo ('agresif', 'savunmaci', 'ilgili') için öngörülerini ve karşı-hamlelerini ('our_counter_move') tanımla.\n"

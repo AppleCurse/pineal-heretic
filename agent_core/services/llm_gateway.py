@@ -91,6 +91,7 @@ class LLMGateway:
             repair_prompt = (
                 f"Önceki çıktın geçerli bir JSON değildi veya format uymuyordu. "
                 f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{json.dumps(schema.model_json_schema())}\n"
+                f"DİKKAT: Eksik veri varsa uydurma kelimeler veya sahte skorlar YAZMA. Sadece var olanları yerleştir.\n"
                 f"Eklediğin bozuk çıktı şuydu:\n{response_text[:200]}"
             )
             repair_text = await self.query(repair_prompt, temperature, tier=tier, model=selected_model)

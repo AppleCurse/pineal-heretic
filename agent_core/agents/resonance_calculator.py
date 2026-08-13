@@ -18,7 +18,20 @@ class ResonanceCalculator:
     
     async def execute(self, input_data: Dict, memory) -> ResonanceProfile:
         user_vector = input_data.get('user_authentic_vector', {'depth': 0.9, 'energy': 0.3})
-        target_vector = input_data.get('target_analysis', {'depth': 0.8, 'energy': 0.4})
+        
+        target_obj = input_data.get('target_analysis', {})
+        # Extract numerical vector from Pydantic model (DigitalColdReading)
+        if hasattr(target_obj, 'model_dump'):
+            t_dict = target_obj.model_dump()
+        elif hasattr(target_obj, 'dict'):
+            t_dict = target_obj.dict()
+        else:
+            t_dict = target_obj if isinstance(target_obj, dict) else {}
+            
+        target_vector = {
+            'depth': float(t_dict.get('achilles_score', 0)) / 100.0,
+            'energy': 0.5 # Default energy since it's not explicitly in DigitalColdReading
+        }
         
         # Cosine Similarity hesaplama
         similarity = self._cosine_similarity(user_vector, target_vector)

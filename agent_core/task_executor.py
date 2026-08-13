@@ -129,9 +129,15 @@ class PinealExecutor:
                     raise KeyError("Bilinmeyen yetenek: " + agent_name)
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
-                result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
-                if not isinstance(result, BaseModel):
-                    raise TypeError(agent_name + " gecersiz cikti: " + str(type(result)))
+                try:
+                    result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
+                    if not isinstance(result, BaseModel):
+                        raise TypeError(agent_name + " gecersiz cikti: " + str(type(result)))
+                except InsufficientEvidenceError:
+                    raise
+                except Exception as e:
+                    self._log("WARNING", f"[{task_id}] AGENT {agent_name} BASTARISIZ OLDU: {str(e)[:100]}. Zincir (Pipeline) devam ediyor...")
+                    continue  # Fallback: Ajan çöktüyse zinciri kırma, sonrakine geç
 
                 check = self.uncertainty.evaluate(result, agent_name)
                 

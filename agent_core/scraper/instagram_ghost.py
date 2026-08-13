@@ -168,10 +168,9 @@ class InstagramGhostScraper:
                     # Tek post bozuksa hepsini çökertme, atla
                     continue
 
-            # Eğer private ve post yoksa bu normal - HALT değil, ama evidence düşük
+            # Eğer private ve post yoksa, sonraki ajanlar boş veriyle halüsinasyon göreceği için durdur
             if is_private and len(posts) == 0:
-                # Private hesap - bu bir hata değil, bir kanıt türü
-                pass
+                raise InsufficientEvidenceError(f"Hedef profil gizli (Private) ve gönderi okunamıyor: {username}")
 
             profile = InstagramProfile(
                 username=username,

@@ -134,61 +134,66 @@ async def run_mission(req: InitiatePayload):
                 from playwright.async_api import async_playwright
                 from playwright_stealth import stealth_async
                 async with async_playwright() as p:
-                    browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
-                    ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                    
-                    if req.scraper_type == "instagram" and InstagramGhostScraper:
-                        ctx = await browser.new_context(**ctx_kwargs)
-                        if cookie:
-                            parsed = []
-                            for part in cookie.split(";"):
-                                if "=" in part:
-                                    k, v = part.split("=", 1)
-                                    parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
-                            if parsed:
-                                await ctx.add_cookies(parsed)
+                    browser = None
+                    try:
+                        browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                        ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                         
-                        page = await ctx.new_page()
-                        await stealth_async(page)
-                        ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
-                        ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
-                        
-                        payload["target_profile"].update({
-                            "username": "@" + ig_data.username,
-                            "bio": ig_data.biography or "",
-                            "posts": [p.caption for p in ig_data.posts if p.caption],
-                            "images": [p.display_url for p in ig_data.posts],
-                            "followers": ig_data.follower_count or 0,
-                            "is_private": ig_data.is_private
-                        })
-                        
-                    elif req.scraper_type == "cross" and scrape_readonly and InstagramGhostScraper:
-                        # Scrape X (runs sync via thread)
-                        x_data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
-                        
-                        # Scrape IG
-                        ctx = await browser.new_context(**ctx_kwargs)
-                        if cookie:
-                            parsed = []
-                            for part in cookie.split(";"):
-                                if "=" in part:
-                                    k, v = part.split("=", 1)
-                                    parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
-                            if parsed:
-                                await ctx.add_cookies(parsed)
-                        page = await ctx.new_page()
-                        await stealth_async(page)
-                        ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
-                        ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
-                        
-                        merged = x_data.copy()
-                        merged["posts"] = x_data.get("posts", []) + [p.caption for p in ig_data.posts if p.caption]
-                        merged["images"] = x_data.get("images", []) + [p.display_url for p in ig_data.posts]
-                        payload["target_profile"].update({k: v for k, v in merged.items() if v})
-                        
-                    elif scrape_readonly:
-                        data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
-                        payload["target_profile"].update({k: v for k, v in data.items() if v})
+                        if req.scraper_type == "instagram" and InstagramGhostScraper:
+                            ctx = await browser.new_context(**ctx_kwargs)
+                            if cookie:
+                                parsed = []
+                                for part in cookie.split(";"):
+                                    if "=" in part:
+                                        k, v = part.split("=", 1)
+                                        parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
+                                if parsed:
+                                    await ctx.add_cookies(parsed)
+                            
+                            page = await ctx.new_page()
+                            await stealth_async(page)
+                            ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
+                            ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
+                            
+                            payload["target_profile"].update({
+                                "username": "@" + ig_data.username,
+                                "bio": ig_data.biography or "",
+                                "posts": [p.caption for p in ig_data.posts if p.caption],
+                                "images": [p.display_url for p in ig_data.posts],
+                                "followers": ig_data.follower_count or 0,
+                                "is_private": ig_data.is_private
+                            })
+                            
+                        elif req.scraper_type == "cross" and scrape_readonly and InstagramGhostScraper:
+                            # Scrape X (runs sync via thread)
+                            x_data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
+                            
+                            # Scrape IG
+                            ctx = await browser.new_context(**ctx_kwargs)
+                            if cookie:
+                                parsed = []
+                                for part in cookie.split(";"):
+                                    if "=" in part:
+                                        k, v = part.split("=", 1)
+                                        parsed.append({"name": k.strip(), "value": v.strip(), "domain": ".instagram.com", "path": "/"})
+                                if parsed:
+                                    await ctx.add_cookies(parsed)
+                            page = await ctx.new_page()
+                            await stealth_async(page)
+                            ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
+                            ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
+                            
+                            merged = x_data.copy()
+                            merged["posts"] = x_data.get("posts", []) + [p.caption for p in ig_data.posts if p.caption]
+                            merged["images"] = x_data.get("images", []) + [p.display_url for p in ig_data.posts]
+                            payload["target_profile"].update({k: v for k, v in merged.items() if v})
+                            
+                        elif scrape_readonly:
+                            data = await asyncio.to_thread(scrape_readonly, req.url, cookies=cookie)
+                            payload["target_profile"].update({k: v for k, v in data.items() if v})
+                    finally:
+                        if browser:
+                            await browser.close()
                         
                 await broadcast_log(client_id, "INFO", f"TELEMETRİ: Veri ele geçirildi.")
             except Exception as e:
