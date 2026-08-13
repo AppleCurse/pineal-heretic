@@ -2,6 +2,13 @@ import json
 import time
 from playwright.sync_api import sync_playwright
 
+class RateLimitError(Exception):
+    pass
+
+class TargetPrivateError(Exception):
+    pass
+
+
 def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
     """
     Network Interception (GraphQL) tabanlı Anti-Kırılgan Scraper.
@@ -24,12 +31,24 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
             if response.request.method == "OPTIONS":
                 return
                 
+            if response.status == 429:
+                raise RateLimitError("X (Twitter) Rate Limit'e (429) takildik. Cok fazla istek atildi.")
+            if response.status == 403:
+                raise RateLimitError("X (Twitter) Erisim Reddedildi (403). Cookie suresi dolmus olabilir.")
+
             # JSON yanıtını al
-            resp_json = response.json()
+            try:
+                resp_json = response.json()
+            except:
+                return
             
             # 1. Biyografi Yakalama (UserByScreenName)
             if "UserByScreenName" in response.url:
                 legacy = resp_json.get("data", {}).get("user", {}).get("result", {}).get("legacy", {})
+                is_blue_verified = resp_json.get("data", {}).get("user", {}).get("result", {}).get("is_blue_verified", False)
+                # Check if account is protected/private
+                if legacy.get("protected"):
+                    raise TargetPrivateError("Hedef hesap gizli (Protected). Icerik kazinamiyor.")
                 bio = legacy.get("description", "")
                 if bio:
                     scraped_data["bio"] = bio
@@ -63,6 +82,10 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
                                     if m.get("type") == "photo":
                                         scraped_data["images"].append(m.get("media_url_https", ""))
 
+        except RateLimitError as e:
+            scraped_data["error"] = e
+        except TargetPrivateError as e:
+            scraped_data["error"] = e
         except Exception as e:
             # Sessizce yut, ağ trafiği gürültülü olabilir
             pass
@@ -97,6 +120,10 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
         
         browser.close()
         
+        
+        if "error" in scraped_data:
+            raise scraped_data["error"]
+
         # Fallback (Eğer GraphQL değişmişse veya veri gelmemişse)
         if not scraped_data["bio"]:
             scraped_data["bio"] = "Kamusal biyografi taranamadi veya gizli."

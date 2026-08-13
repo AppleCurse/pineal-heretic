@@ -6,6 +6,7 @@ class GeneratedMessage(BaseModel):
     message: str
     strategy: str
     confidence: float
+    compliance_score: float  # 0.0 - 100.0 (Kutsal Kural ihlal skoru)
     follow_up: Optional[str]  # Yanıt gelirse devamı, ama bekleme
     
     class Config:
@@ -59,7 +60,8 @@ class PatternInterrupt:
             f"Hedef Analizi: {target_analysis}\n"
             f"Kullanıcı Gerçeği: {user_truth}\n\n"
             f"{sacred_rules}\n\n"
-            f"Beklenen JSON formatında çıktını üret. 'message' alanı senin nihai mesajındır."
+            f"Beklenen JSON formatında çıktını üret. 'message' alanı senin nihai mesajındır.\n"
+            f"'compliance_score' alanında ise bu mesajın Kutsal Kurallara (varsa) yüzde kaç (0-100) oranında uyduğunu değerlendir."
         )
         
         return await llm_gateway.query_json(prompt, GeneratedMessage)

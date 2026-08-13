@@ -28,24 +28,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-connected_websockets = {}  # client_id -> set of websockets
-executors = {}  # client_id -> PinealExecutor
-vaults = {}  # client_id -> dict
+app.state.rooms = {}  # client_id -> {"executor": PinealExecutor, "vault": {}, "websockets": set()}
+
+def get_room(client_id: str) -> dict:
+    if client_id not in app.state.rooms:
+        app.state.rooms[client_id] = {
+            "executor": PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg)),
+            "vault": {},
+            "websockets": set()
+        }
+    return app.state.rooms[client_id]
 
 def get_executor(client_id: str) -> PinealExecutor:
-    if client_id not in executors:
-        executors[client_id] = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
-    return executors[client_id]
+    return get_room(client_id)["executor"]
 
 def get_vault(client_id: str) -> dict:
-    if client_id not in vaults:
-        vaults[client_id] = {}
-    return vaults[client_id]
+    return get_room(client_id)["vault"]
+
 
 async def broadcast_log(client_id: str, level: str, msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
     payload = json.dumps({"type": "log", "ts": ts, "level": level, "msg": msg})
-    ws_set = connected_websockets.get(client_id, set())
+    room = app.state.rooms.get(client_id)
+    if not room: return
+    ws_set = room["websockets"]
     for ws in list(ws_set):
         try:
             await ws.send_text(payload)
@@ -62,14 +68,13 @@ def sync_log(client_id: str, level: str, msg: str):
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.accept()
-    if client_id not in connected_websockets:
-        connected_websockets[client_id] = set()
-    connected_websockets[client_id].add(websocket)
+    room = get_room(client_id)
+    room["websockets"].add(websocket)
     try:
         while True:
             await websocket.receive_text()
     except:
-        connected_websockets[client_id].discard(websocket)
+        room["websockets"].discard(websocket)
 
 class InitiatePayload(BaseModel):
     client_id: str
@@ -126,7 +131,9 @@ async def run_mission(req: InitiatePayload):
 async def broadcast_result_error(client_id, status, msg):
     await broadcast_log(client_id, "ERROR", msg)
     data = {"type": "result", "status": status}
-    ws_set = connected_websockets.get(client_id, set())
+    room = app.state.rooms.get(client_id)
+    if not room: return
+    ws_set = room["websockets"]
     for ws in list(ws_set):
         try:
             await ws.send_text(json.dumps(data))
@@ -148,7 +155,9 @@ async def broadcast_result(client_id, res):
         "reso": find(res.evidence_chain, "resonance_calc"),
         "hook": find(res.evidence_chain, "pattern_interrupt")
     }
-    ws_set = connected_websockets.get(client_id, set())
+    room = app.state.rooms.get(client_id)
+    if not room: return
+    ws_set = room["websockets"]
     for ws in list(ws_set):
         try:
             await ws.send_text(json.dumps(data))

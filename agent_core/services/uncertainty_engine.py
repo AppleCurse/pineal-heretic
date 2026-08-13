@@ -24,28 +24,40 @@ class UncertaintyEngine:
         result_text = str(result)
         
         # 1. Aşırı kesinlik kontrolü
-        has_absolutes = any(marker in result_text.lower() 
+        has_absolutes = any(marker in result_text.lower()
                            for marker in self.HALUCINATION_MARKERS)
-        
-        # 2. Sayısal tutarsızlık
+
         confidence = getattr(result, 'confidence', 0.5)
+
+        # 2. Kanıt eksikliği (Gerçekten boş veri gelmişse puanı çökert)
+        is_empty = False
+        if isinstance(result, BaseModel):
+            result_dict = result.dict() if hasattr(result, 'dict') else result.model_dump()
+            # If any list is empty in the result, it's missing evidence
+            if any(isinstance(v, list) and len(v) == 0 for v in result_dict.values()):
+                is_empty = True
+                confidence = 0.1
+                
+        if 'evidence' in result_text and 'bulunamadı' in result_text:
+            is_empty = True
+            confidence = 0.1
+            
+        if is_empty:
+             return UncertaintyReport(
+                is_suspicious=True,
+                confidence=confidence,
+                reason="Eksik kanıt (Boş liste veya 'bulunamadı'). Router kesilmeli."
+             )
+
         if confidence > 0.95 and has_absolutes:
             return UncertaintyReport(
                 is_suspicious=True,
                 confidence=0.9,
                 reason="Aşırı kesinlik + yüksek confidence = Halüsinasyon şüphesi"
             )
-        
-        # 3. Kanıt eksikliği
-        if 'evidence' in result_text and 'bulunamadı' in result_text:
-            return UncertaintyReport(
-                is_suspicious=True,
-                confidence=0.8,
-                reason="Kanıt yoksa çıkarım yok"
-            )
-        
+
         return UncertaintyReport(
             is_suspicious=False,
             confidence=confidence,
-            reason="Kanıt zinciri sağlam"
+            reason="Güvenli"
         )
