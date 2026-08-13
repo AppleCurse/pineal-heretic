@@ -206,3 +206,92 @@ body{min-height:100vh;background:var(--ink);color:#e8d8b0;font-family:'Inter',sy
     box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
 }
 
+
+.chat-panel {
+    background: #0d0d0d;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+}
+
+.chat-history {
+    flex-grow: 1;
+    overflow-y: auto;
+    background: #000;
+    border: 1px solid #222;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+}
+
+.chat-bubble {
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    word-wrap: break-word;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.9rem;
+}
+
+.chat-bubble.target {
+    background: #1a1a1a;
+    border-left: 3px solid #8B0000;
+    color: #ccc;
+    align-self: flex-start;
+}
+
+.chat-bubble.agent {
+    background: #2a0000;
+    border-right: 3px solid #ff0000;
+    color: #fff;
+    margin-left: auto;
+    text-align: right;
+}
+
+.chat-meta {
+    font-size: 0.7rem;
+    color: #666;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.chat-input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input {
+    flex-grow: 1;
+    background: #111;
+    border: 1px solid #333;
+    color: #fff;
+    padding: 10px;
+    font-family: "JetBrains Mono", monospace;
+    border-radius: 4px;
+}
+
+.chat-input:focus {
+    outline: none;
+    border-color: #8B0000;
+}
+
+.btn-chat {
+    background: #8B0000;
+    color: #fff;
+    border: none;
+    padding: 0 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: 0.2s;
+}
+
+.btn-chat:hover {
+    background: #ff0000;
+    box-shadow: 0 0 10px rgba(255,0,0,0.5);
+}
+

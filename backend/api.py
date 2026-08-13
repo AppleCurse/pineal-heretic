@@ -29,6 +29,12 @@ try:
 except Exception:
     shadow_executor = None
 
+try:
+    from agent_core.chat.dialogue_manager import DialogueManager
+    dialogue_manager = DialogueManager()
+except Exception:
+    dialogue_manager = None
+
 app = FastAPI(title="PINEAL-HERETIC v2.0 API")
 
 app.add_middleware(
@@ -256,6 +262,8 @@ async def api_vault(req: VaultPayload):
         executor.llm_gateway.set_key(req.api_key)
         if shadow_executor is not None:
             shadow_executor.llm_gateway.set_key(req.api_key)
+        if dialogue_manager is not None:
+            dialogue_manager.llm.set_key(req.api_key)
         vault["or_key"] = True
         await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
         
@@ -313,6 +321,29 @@ async def shadow_generate(task: dict):
         return {"error": "Shadow Protocol yüklü değil"}
     result = await shadow_executor.execute(task)
     return result.model_dump()
+
+class ChatPayload(BaseModel):
+    task_id: str
+    target_profile: dict
+    user_profile: dict
+    target_message: str
+
+@app.post("/api/chat/respond")
+async def chat_respond(payload: ChatPayload):
+    """Hedefin mesajına otonom karşı hamle üretir"""
+    if dialogue_manager is None:
+        return {"error": "Gölge Sohbet modülü yüklü değil"}
+    
+    try:
+        if payload.task_id not in dialogue_manager.sessions:
+            dialogue_manager.start_session(payload.task_id, payload.target_profile, payload.user_profile)
+            
+        res = await dialogue_manager.generate_response(payload.task_id, payload.target_message)
+        return res.model_dump()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
 
 os.makedirs("frontend", exist_ok=True)
 # Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin

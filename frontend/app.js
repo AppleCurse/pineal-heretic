@@ -436,3 +436,65 @@ document.getElementById("btn-shadow").addEventListener("click", async () => {
     }
 });
 
+
+let activeChatTaskId = "mock_task_" + Date.now();
+
+document.getElementById("btn-chat").addEventListener("click", async () => {
+    const inputEl = document.getElementById("inp-chat");
+    const msg = inputEl.value.trim();
+    if (!msg) return;
+
+    const chatBtn = document.getElementById("btn-chat");
+    chatBtn.disabled = true;
+    chatBtn.innerText = "DÜŞÜNÜLÜYOR...";
+
+    const histEl = document.getElementById("chat-history");
+    histEl.innerHTML += `<div class="chat-bubble target"><div class="chat-meta">Hedef</div>${escapeHTML(msg)}</div>`;
+    histEl.scrollTop = histEl.scrollHeight;
+    inputEl.value = "";
+
+    const user = {
+        rituals: document.getElementById("inp-rituals").value.split(","),
+        music: document.getElementById("inp-playlist").value,
+        envies: document.getElementById("inp-envies").value
+    };
+    
+    const targetUrl = document.getElementById("inp-target-url").value;
+    const target = window.lastScrapedTarget || {
+        username: targetUrl.split("/").pop() || "hedef_kisi",
+        bio: "Gerçek veri scraperdan alınmadı.",
+    };
+
+    try {
+        const response = await fetch("/api/chat/respond", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                task_id: activeChatTaskId,
+                target_profile: target,
+                user_profile: user,
+                target_message: msg
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.error) {
+            alert(result.error);
+            return;
+        }
+
+        const analysisStr = `Duruş: ${result.stance} | ${result.internal_analysis}`;
+        appendLog(ts(), "WARN", `GÖLGE ANALİZİ: ${analysisStr}`);
+
+        histEl.innerHTML += `<div class="chat-bubble agent"><div class="chat-meta">Pineal-Heretic (Counter-move)</div>${escapeHTML(result.next_move)}</div>`;
+        histEl.scrollTop = histEl.scrollHeight;
+        
+    } catch (e) {
+        alert("Chat Error: " + e);
+    } finally {
+        chatBtn.disabled = false;
+        chatBtn.innerText = "YANIT ÜRET";
+    }
+});
+
