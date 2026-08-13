@@ -1,6 +1,9 @@
 import os
 import json
 import re
+import os
+import json
+import re
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from typing import Type, TypeVar, Any
@@ -8,6 +11,9 @@ from typing import Type, TypeVar, Any
 T = TypeVar('T', bound=BaseModel)
 
 class LLMGateway:
+    TIER_1_MODEL = "anthropic/claude-3.5-sonnet" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
+    TIER_2_MODEL = "meta-llama/llama-3-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
+
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.client = None
@@ -25,14 +31,17 @@ class LLMGateway:
         if self.api_key:
             self.client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.api_key)
 
-    async def query(self, prompt: str, temperature: float = 0.7, model: str = "anthropic/claude-3.5-sonnet") -> str:
+    async def query(self, prompt: str, temperature: float = 0.7, tier: int = 1, model: str = None) -> str:
         if self.circuit_open:
             raise RuntimeError("Circuit breaker ACIK - LLM servisi durduruldu")
         if not self.client:
             raise RuntimeError("LLM anahtari yok. Vault veya .env ile OPENROUTER_API_KEY enjekte et.")
+            
+        selected_model = model or (self.TIER_1_MODEL if tier == 1 else self.TIER_2_MODEL)
+        
         try:
             r = await self.client.chat.completions.create(
-                model=model, temperature=temperature,
+                model=selected_model, temperature=temperature,
                 messages=[{"role": "user", "content": prompt}]
             )
             self.failure_count = 0
@@ -63,7 +72,7 @@ class LLMGateway:
         except json.JSONDecodeError as e:
             raise ValueError(f"JSON Ayrıştırma Hatası: {str(e)} | Orijinal metin: {text[:100]}...")
 
-    async def query_json(self, prompt: str, schema: Type[T], temperature: float = 0.7, model: str = "anthropic/claude-3.5-sonnet") -> T:
+    async def query_json(self, prompt: str, schema: Type[T], temperature: float = 0.7, tier: int = 1, model: str = None) -> T:
         """LLM'den sorgu atar, beklenen JSON formatını (Pydantic schema) tamir mekanizmasıyla garanti eder."""
         full_prompt = (
             f"{prompt}\n\n"
@@ -71,8 +80,10 @@ class LLMGateway:
             f"{json.dumps(schema.model_json_schema())}"
         )
         
+        selected_model = model or (self.TIER_1_MODEL if tier == 1 else self.TIER_2_MODEL)
+        
         try:
-            response_text = await self.query(full_prompt, temperature, model)
+            response_text = await self.query(full_prompt, temperature, tier=tier, model=selected_model)
             parsed_data = self.extract_json(response_text)
             return schema(**parsed_data)
         except ValueError:
@@ -82,6 +93,6 @@ class LLMGateway:
                 f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{json.dumps(schema.model_json_schema())}\n"
                 f"Eklediğin bozuk çıktı şuydu:\n{response_text[:200]}"
             )
-            repair_text = await self.query(repair_prompt, temperature, model)
+            repair_text = await self.query(repair_prompt, temperature, tier=tier, model=selected_model)
             parsed_data = self.extract_json(repair_text)
             return schema(**parsed_data)

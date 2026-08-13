@@ -44,7 +44,7 @@ class AutonomousVerifier:
         class ClaimList(BaseModel):
             claims: List[Claim]
             
-        claim_data = await llm_gateway.query_json(claim_prompt, ClaimList)
+        claim_data = await llm_gateway.query_json(claim_prompt, ClaimList, tier=2)
         
         if not claim_data.claims:
             return VerifierReport(verifications=[], overall_authenticity_score=1.0)
@@ -80,7 +80,7 @@ class AutonomousVerifier:
             )
             
             # Yeniden kullanılabilir Schema (tekil)
-            single_verification = await llm_gateway.query_json(verify_prompt, VerificationResult)
+            single_verification = await llm_gateway.query_json(verify_prompt, VerificationResult, tier=2)
             verifications.append(single_verification)
             
         # Skor hesapla

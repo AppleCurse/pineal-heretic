@@ -101,7 +101,7 @@ class PinealExecutor:
             "Onceki analiz supheli bulundu. Kanit: " + suspicious.json() +
             "\nKurallar: 1) Emin degilsen 'bilmiyorum' de 2) Tahmin uretme 3) Sadece veride olanlari analiz et. Yeniden analiz et."
         )
-        verified = await self.llm_gateway.query(prompt, temperature=0.1)
+        verified = await self.llm_gateway.query(prompt, temperature=0.1, tier=1)
         return VerifiedNote(note=verified)
 
     async def execute_task(self, input_data: Dict[str, Any], task_id: str) -> TaskStatus:
