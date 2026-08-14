@@ -1,0 +1,48 @@
+{
+  "task_id": "op_053220",
+  "last_updated": "2026-08-14T02:32:52.573816+00:00",
+  "evidence": [
+    {
+      "agent": "mirror_truth",
+      "result": {
+        "user_core_frequency": "derinlik aray\u0131\u015f\u0131",
+        "surface_persona": "melankolik d\u00fc\u015f\u00fcn\u00fcr",
+        "alignment_score": 0.85,
+        "authentic_anchors": [
+          "\u00e7ay",
+          "kitap",
+          "yaln\u0131z y\u00fcr\u00fcy\u00fc\u015f"
+        ]
+      },
+      "timestamp": "2026-08-14T02:32:23.043125+00:00"
+    },
+    {
+      "agent": "human_behavior",
+      "result": {
+        "surface_identity": "Kulpu K\u0131r\u0131k \u00c7aydanl\u0131k",
+        "detected_wound": "Low engagement and validation seeking",
+        "defense_mechanism": "Overcompensation through following others",
+        "micro_signals": [
+          {
+            "signal_type": "High Following Count",
+            "confidence": 0.85,
+            "location": "Profile Description",
+            "evidence": "654 Following",
+            "psychological_weight": 0.7
+          },
+          {
+            "signal_type": "Low Follower Count",
+            "confidence": 0.8,
+            "location": "Profile Description",
+            "evidence": "435 Followers",
+            "psychological_weight": 0.6
+          }
+        ],
+        "achilles_score": 0.75,
+        "resonance_potential": 0.65
+      },
+      "timestamp": "2026-08-14T02:32:52.572816+00:00"
+    }
+  ],
+  "confidence": 0.0
+}
