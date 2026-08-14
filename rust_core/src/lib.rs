@@ -11,6 +11,7 @@ pub mod agent_pipeline;
 pub mod task_isolation;
 pub mod agents;
 pub mod aspasia;
+pub mod tauri_bridge;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
 pub use vault::{StealthVault, VaultError, EncryptedPayload};
