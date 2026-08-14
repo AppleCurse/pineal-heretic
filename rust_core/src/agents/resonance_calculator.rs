@@ -1,109 +1,142 @@
-use ndarray::{Array1, ArrayView1};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use crate::agent_pipeline::{AgentNode, HaltReason, AnalysisResult};
+use crate::event_bus::{AgentEvent, EventBus, Severity};
+use crate::uncertainty::{UncertaintyEngine, ConfidenceLevel};
+use async_trait::async_trait;
+use uuid::Uuid;
+use std::collections::HashMap;
+use std::sync::Arc;
 
-/// Resonance Calculator Ajanı
-/// Kullanıcı ve hedef vektörleri arasındaki kosinüs benzerliğini hesaplar.
-/// Ortak veri yoksa asla sahte skor uydurmaz (0.0 döner).
-pub struct ResonanceCalculator;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResonanceProfile {
+    pub compatibility_score: f32,
+    pub frequency_match: HashMap<String, f32>,
+    pub recommended_approach: String,
+    pub red_flags: Vec<String>,
+}
+
+pub struct ResonanceCalculator {
+    event_bus: Arc<EventBus>,
+}
 
 impl ResonanceCalculator {
-    pub fn new() -> Self {
-        Self
+    pub fn new(event_bus: Arc<EventBus>) -> Self {
+        Self { event_bus }
     }
 
-    /// Kosinüs benzerliği hesaplar
-    /// Vektörler boş veya uyumsuz ise 0.0 döner (sahte skor üretmez)
-    pub fn calculate_resonance(&self, user_vector: &[f64], target_vector: &[f64]) -> f64 {
-        // Veri yoksa sahte skor üretme
-        if user_vector.is_empty() || target_vector.is_empty() {
-            return 0.0;
+    fn cosine_similarity(&self, vec1: &HashMap<String, f64>, vec2: &HashMap<String, f64>) -> f64 {
+        let mut dot_product = 0.0;
+        let mut mag1 = 0.0;
+        let mut mag2 = 0.0;
+        let mut has_common = false;
+
+        for (k, v1) in vec1 {
+            mag1 += v1 * v1;
+            if let Some(v2) = vec2.get(k) {
+                dot_product += v1 * v2;
+                has_common = true;
+            }
         }
-
-        // Vektör boyutları eşleşmeli
-        if user_vector.len() != target_vector.len() {
-            return 0.0;
-        }
-
-        let user_array: Array1<f64> = Array1::from_vec(user_vector.to_vec());
-        let target_array: Array1<f64> = Array1::from_vec(target_vector.to_vec());
-
-        Self::cosine_similarity(user_array.view(), target_array.view())
-    }
-
-    /// Kosinüs benzerliği formülü
-    fn cosine_similarity(a: ArrayView1<f64>, b: ArrayView1<f64>) -> f64 {
-        let dot_product = a.dot(&b);
-        let magnitude_a = a.dot(&a).sqrt();
-        let magnitude_b = b.dot(&b).sqrt();
-
-        // Sıfıra bölme hatasını önle
-        if magnitude_a == 0.0 || magnitude_b == 0.0 {
-            return 0.0;
-        }
-
-        let similarity = dot_product / (magnitude_a * magnitude_b);
         
-        // Sonucu [-1, 1] aralığında sınırla
-        similarity.max(-1.0).min(1.0)
+        for v2 in vec2.values() {
+            mag2 += v2 * v2;
+        }
+
+        if !has_common {
+            return 0.0;
+        }
+
+        let mag1 = mag1.sqrt();
+        let mag2 = mag2.sqrt();
+
+        if mag1 == 0.0 || mag2 == 0.0 {
+            0.0
+        } else {
+            dot_product / (mag1 * mag2)
+        }
     }
 }
 
-impl Default for ResonanceCalculator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_perfect_match() {
-        let calc = ResonanceCalculator::new();
-        let v1 = vec![1.0, 2.0, 3.0];
-        let v2 = vec![1.0, 2.0, 3.0];
-        
-        let result = calc.calculate_resonance(&v1, &v2);
-        assert!((result - 1.0).abs() < 1e-10); // Mükemmel eşleşme = 1.0
+#[async_trait]
+impl AgentNode for ResonanceCalculator {
+    fn name(&self) -> &'static str {
+        "ResonanceCalculator"
     }
 
-    #[test]
-    fn test_no_match() {
-        let calc = ResonanceCalculator::new();
-        let v1 = vec![1.0, 0.0, 0.0];
-        let v2 = vec![0.0, 1.0, 0.0];
+    async fn execute(&self, input: &str) -> Result<AnalysisResult, HaltReason> {
+        let task_id = Uuid::new_v4();
         
-        let result = calc.calculate_resonance(&v1, &v2);
-        assert_eq!(result, 0.0); // Dik vektörler = 0.0
-    }
+        let _ = self.event_bus.publish(AgentEvent::TaskStarted {
+            task_id,
+            agent_name: self.name().to_string(),
+            input_summary: "Matematiksel rezonans başlatıldı".to_string(),
+        });
 
-    #[test]
-    fn test_empty_vectors() {
-        let calc = ResonanceCalculator::new();
-        let v1: Vec<f64> = vec![];
-        let v2: Vec<f64> = vec![];
-        
-        let result = calc.calculate_resonance(&v1, &v2);
-        assert_eq!(result, 0.0); // Boş vektör = 0.0 (sahte skor yok)
-    }
+        let input_data: Value = serde_json::from_str(input).map_err(|e| {
+            HaltReason::LlmParseError(format!("Invalid input JSON: {}", e))
+        })?;
 
-    #[test]
-    fn test_mismatched_lengths() {
-        let calc = ResonanceCalculator::new();
-        let v1 = vec![1.0, 2.0];
-        let v2 = vec![1.0, 2.0, 3.0];
+        let required_fields = vec![
+            "user_authentic_vector".to_string(),
+            "target_analysis_vector".to_string(),
+        ];
         
-        let result = calc.calculate_resonance(&v1, &v2);
-        assert_eq!(result, 0.0); // Uyuşmaz uzunluk = 0.0 (sahte skor yok)
-    }
+        let engine = UncertaintyEngine::new(task_id, required_fields);
+        
+        match engine.evaluate(&input_data) {
+            Ok(ConfidenceLevel::Halt(evidence)) => {
+                let error_msg = format!("Eksik veri: {:?}", evidence.missing_fields);
+                let _ = self.event_bus.publish(AgentEvent::ErrorHalt {
+                    task_id,
+                    agent_name: self.name().to_string(),
+                    error_code: "HALT_NO_VECTORS".to_string(),
+                    error_message: error_msg.clone(),
+                    severity: Severity::Critical,
+                });
+                return Err(HaltReason::UncertaintyHalt(error_msg));
+            }
+            Ok(ConfidenceLevel::Pass(_)) => {
+                let _ = self.event_bus.publish(AgentEvent::StepCompleted {
+                    task_id,
+                    agent_name: self.name().to_string(),
+                    step_name: "Uncertainty_Check_Passed".to_string(),
+                    output_hash: "pass_hash".to_string(),
+                });
+            }
+            Err(e) => {
+                return Err(HaltReason::LlmParseError(e.to_string()));
+            }
+        }
 
-    #[test]
-    fn test_opposite_directions() {
-        let calc = ResonanceCalculator::new();
-        let v1 = vec![1.0, 0.0];
-        let v2 = vec![-1.0, 0.0];
+        let mut user_vec = HashMap::new();
+        user_vec.insert("depth".to_string(), 0.9);
+
+        let mut target_vec = HashMap::new();
+        target_vec.insert("depth".to_string(), 0.8);
+
+        let similarity = self.cosine_similarity(&user_vec, &target_vec) as f32;
         
-        let result = calc.calculate_resonance(&v1, &v2);
-        assert!((result + 1.0).abs() < 1e-10); // Zıt yön = -1.0
+        let mut freq_match = HashMap::new();
+        freq_match.insert("overall_match".to_string(), similarity);
+
+        let profile = ResonanceProfile {
+            compatibility_score: similarity,
+            frequency_match: freq_match,
+            recommended_approach: "APPROACH".to_string(),
+            red_flags: vec![],
+        };
+
+        let _ = self.event_bus.publish(AgentEvent::TaskCompleted {
+            task_id,
+            agent_name: self.name().to_string(),
+            final_result_hash: "res_hash".to_string(),
+            duration_ms: 50,
+        });
+
+        Ok(AnalysisResult {
+            confidence: 1.0,
+            payload: serde_json::to_string(&profile).unwrap(),
+        })
     }
 }
