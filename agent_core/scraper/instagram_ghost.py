@@ -110,8 +110,8 @@ class InstagramGhostScraper:
                 except:
                     continue
         
-        # Eğer hiçbir pattern tutmadıysa, bu halüsinasyon değil, kanıt yok demektir
-        raise InsufficientEvidenceError(f"Instagram HTML'inde JSON bulunamadı: {username} - muhtemelen private veya rate-limit")
+        # Eğer hiçbir pattern tutmadıysa, boş dön. _parse_real_profile HTML üzerinden bulmaya çalışacak.
+        return {}
 
     def _parse_real_profile(self, raw_json: Dict[str, Any], html: str, username: str) -> InstagramProfile:
         """
@@ -136,13 +136,35 @@ class InstagramGhostScraper:
             follower_match = re.search(r'"edge_followed_by":{"count":(\d+)}', html)
             following_match = re.search(r'"edge_follow":{"count":(\d+)}', html)
             
-            # Eğer sayılar yoksa, None bırak - 0 uydurma
             follower_count = int(follower_match.group(1)) if follower_match else None
             following_count = int(following_match.group(1)) if following_match else None
 
             # Bio'yu og:description'dan al - en gerçek yer
             bio_match = re.search(r'<meta property="og:description" content="([^"]+)"', html)
-            biography = bio_match.group(1) if bio_match else None
+            biography = None
+            if bio_match:
+                desc = bio_match.group(1)
+                biography = desc
+                # Yeni Instagram yapısında follower/following og:description içindedir
+                if follower_count is None:
+                    fm = re.search(r'([\d\.,MKmk]+)\s+(Followers|Takipçi)', desc)
+                    if fm:
+                        try:
+                            # 1.2M veya 1,200 gibi değerleri basitleştir
+                            valStr = fm.group(1).replace(",", "").replace(".", "")
+                            if "K" in valStr.upper(): valStr = valStr.upper().replace("K", "00")
+                            if "M" in valStr.upper(): valStr = valStr.upper().replace("M", "00000")
+                            follower_count = int(valStr)
+                        except: pass
+                if following_count is None:
+                    fm = re.search(r'([\d\.,MKmk]+)\s+(Following|Takip)', desc)
+                    if fm:
+                        try:
+                            valStr = fm.group(1).replace(",", "").replace(".", "")
+                            if "K" in valStr.upper(): valStr = valStr.upper().replace("K", "00")
+                            if "M" in valStr.upper(): valStr = valStr.upper().replace("M", "00000")
+                            following_count = int(valStr)
+                        except: pass
 
             profile_pic_match = re.search(r'"profile_pic_url":"([^"]+)"', html)
             profile_pic_url = profile_pic_match.group(1).replace("\\u0026", "&") if profile_pic_match else None
@@ -205,8 +227,9 @@ class InstagramGhostScraper:
             raise InsufficientEvidenceError("Playwright page verilmedi - hayalet tarayıcı vault'tan gelmeli, kendi kendine açmam")
 
         target_url = f"{self.base_url}/{username}/"
-        
-        # Stealth navigation
+        import random
+        # Stealth navigation yerine bekleme
+        await playwright_page.wait_for_timeout(random.randint(2000, 4000))
         await playwright_page.goto(target_url, wait_until="domcontentloaded")
         self._random_delay()
         

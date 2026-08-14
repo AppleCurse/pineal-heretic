@@ -49,9 +49,31 @@ app.state.rooms = {}  # client_id -> {"executor": PinealExecutor, "vault": {}, "
 
 def get_room(client_id: str) -> dict:
     if client_id not in app.state.rooms:
+        executor = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
+        vault = {}
+        
+        # Load persisted vault
+        if os.path.exists(".pineal_vault.json"):
+            try:
+                with open(".pineal_vault.json", "r") as f:
+                    vault = json.load(f)
+                    
+                if vault.get("api_key"):
+                    executor.llm_gateway.set_key(vault["api_key"])
+                    if shadow_executor: shadow_executor.llm_gateway.set_key(vault["api_key"])
+                    if dialogue_manager: dialogue_manager.llm.set_key(vault["api_key"])
+                    
+                tavily = vault.get("tavily_key", "")
+                serp = vault.get("serpapi_key", "")
+                exa = vault.get("exa_key", "")
+                if tavily or serp or exa:
+                    executor.search_engine.set_keys(tavily=tavily, serpapi=serp, exa=exa)
+            except:
+                pass
+
         app.state.rooms[client_id] = {
-            "executor": PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg)),
-            "vault": {},
+            "executor": executor,
+            "vault": vault,
             "websockets": set()
         }
     return app.state.rooms[client_id]
@@ -131,8 +153,8 @@ async def run_mission(req: InitiatePayload):
         if req.url:
             await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url} [{req.scraper_type.upper()}]")
             try:
+                import random
                 from playwright.async_api import async_playwright
-                from playwright_stealth import stealth_async
                 async with async_playwright() as p:
                     browser = None
                     ctx = None
@@ -153,7 +175,7 @@ async def run_mission(req: InitiatePayload):
                                     await ctx.add_cookies(parsed)
                             
                             page = await ctx.new_page()
-                            await stealth_async(page)
+                            await page.wait_for_timeout(random.randint(2000,4000))
                             ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                             ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                             
@@ -181,7 +203,7 @@ async def run_mission(req: InitiatePayload):
                                 if parsed:
                                     await ctx.add_cookies(parsed)
                             page = await ctx.new_page()
-                            await stealth_async(page)
+                            await page.wait_for_timeout(random.randint(2000,4000))
                             ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                             ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                             
@@ -211,6 +233,16 @@ async def run_mission(req: InitiatePayload):
                     raise e
         
         task_id = f"op_{datetime.now().strftime('%H%M%S')}"
+        
+        # Zırh: Eğer scraper hiçbir veri çekemediyse veya tüm API'ler hata verdiyse, burada kesin olarak durdur.
+        target_profile = payload.get("target_profile", {})
+        has_bio = bool(target_profile.get("bio"))
+        has_posts = bool(target_profile.get("posts"))
+        
+        if not target_profile or (not has_bio and not has_posts):
+            await broadcast_log(client_id, "ERROR", "KANIT KİLİDİ: Hedef profilden bio veya post çekilemedi (scraper başarısız). Halüsinasyon önleme aktiftir.")
+            raise InsufficientEvidenceError("Hedef profilden yeterli veri çekilemedi (bio ve post yok).")
+            
         for attempt in range(1, 4):
             try:
                 await broadcast_log(client_id, "INFO", f"OPERASYON BAŞLATILIYOR (Deneme {attempt}/3)...")
@@ -285,6 +317,7 @@ async def api_vault(req: VaultPayload):
         vault["x_cookie"] = req.x_cookie
         await broadcast_log(req.client_id, "INFO", f"KASA: Cookie belleğe mühürlendi.")
     if req.api_key:
+        vault["api_key"] = req.api_key
         executor.llm_gateway.set_key(req.api_key)
         if shadow_executor is not None:
             shadow_executor.llm_gateway.set_key(req.api_key)
@@ -294,9 +327,19 @@ async def api_vault(req: VaultPayload):
         await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
         
     if req.tavily_key or req.serpapi_key or req.exa_key:
+        if req.tavily_key: vault["tavily_key"] = req.tavily_key
+        if req.serpapi_key: vault["serpapi_key"] = req.serpapi_key
+        if req.exa_key: vault["exa_key"] = req.exa_key
         executor.search_engine.set_keys(tavily=req.tavily_key, serpapi=req.serpapi_key, exa=req.exa_key)
         vault["search_keys"] = True
         await broadcast_log(req.client_id, "INFO", "KASA: Arama Motoru anahtarları mühürlendi.")
+        
+    # Disk'e kaydet
+    try:
+        with open(".pineal_vault.json", "w") as f:
+            json.dump(vault, f)
+    except:
+        pass
         
     return {"status": "secured"}
 
@@ -335,18 +378,24 @@ async def shadow_analyze(profile: dict):
     """Dark Triad analizi"""
     if shadow_executor is None:
         return {"error": "Shadow Protocol yüklü değil"}
-    from agent_core.psychology.dark_triad import DarkTriadAnalyzer
-    analyzer = DarkTriadAnalyzer()
-    result = analyzer.analyze(profile)
-    return result.model_dump()
+    try:
+        from agent_core.psychology.dark_triad import DarkTriadAnalyzer
+        analyzer = DarkTriadAnalyzer()
+        result = analyzer.analyze(profile)
+        return result.model_dump()
+    except Exception as e:
+        return {"error": f"Analiz Hatası: {str(e)}"}
 
 @app.post("/api/shadow/generate")
 async def shadow_generate(task: dict):
     """Shadow mesaj üretimi"""
     if shadow_executor is None:
         return {"error": "Shadow Protocol yüklü değil"}
-    result = await shadow_executor.execute(task)
-    return result.model_dump()
+    try:
+        result = await shadow_executor.execute(task)
+        return result.model_dump()
+    except Exception as e:
+        return {"error": f"Shadow Üretim Hatası: {str(e)}"}
 
 class ChatPayload(BaseModel):
     task_id: str

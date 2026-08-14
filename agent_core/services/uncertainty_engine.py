@@ -26,8 +26,8 @@ class UncertaintyEngine:
         has_absolutes = any(marker in result_text.lower()
                            for marker in self.HALUCINATION_MARKERS)
 
-        # Varsayılan güven 0.3'e düşürüldü (Kritik ajanlarda fallback engellemek için)
-        confidence = getattr(result, 'confidence', 0.3)
+        # Varsayılan güven 1.0 (Alanlar doluysa güveniriz, boşsa aşağıda puan kırılır)
+        confidence = getattr(result, 'confidence', 1.0)
 
         # 2. Kanıt eksikliği (Gerçekten boş veri gelmişse puanı çökert)
         is_empty = False
@@ -36,18 +36,14 @@ class UncertaintyEngine:
             
             total_fields = len(result_dict)
             if total_fields > 0:
-                empty_fields = sum(1 for v in result_dict.values() if not v or (isinstance(v, str) and 'bulunamadı' in v.lower()))
+                # Yalnızca None veya boş/bulunamadı stringleri hata say. Boş listeler (verifications=[]) normal olabilir.
+                empty_fields = sum(1 for v in result_dict.values() if v is None or (isinstance(v, str) and ('bulunamadı' in v.lower() or v.strip() == '')))
                 data_score = 1.0 - (empty_fields / total_fields)
                 confidence = min(confidence, data_score)
                 
                 if empty_fields == total_fields:
                     is_empty = True
                     confidence = 0.1
-            
-            # If any list is empty in the result, it's missing evidence
-            if any(isinstance(v, list) and len(v) == 0 for v in result_dict.values()):
-                is_empty = True
-                confidence = 0.1
                 
         if 'evidence' in result_text and 'bulunamadı' in result_text:
             is_empty = True

@@ -30,10 +30,13 @@ class AutonomousVerifier:
         target_profile = input_data.get('target_profile', {})
         bio = target_profile.get('bio', '')
         
-        if not bio or not self.search_engine.tavily_key:
-            # Biyografi boşsa veya arama anahtarı yoksa geç
+        if not self.search_engine.tavily_key:
+            if bio:
+                raise Exception("InsufficientEvidenceError: İddialar var ancak doğrulama anahtarı (Tavily) eksik - HALT")
             return VerifierReport(verifications=[], overall_authenticity_score=1.0)
             
+        if not bio:
+            return VerifierReport(verifications=[], overall_authenticity_score=1.0)            
         # Adım 1: Biyografideki iddiaları (claims) çıkar
         claim_prompt = (
             f"Hedefin biyografisi şu: '{bio}'\n"
@@ -80,8 +83,16 @@ class AutonomousVerifier:
             )
             
             # Yeniden kullanılabilir Schema (tekil)
-            single_verification = await llm_gateway.query_json(verify_prompt, VerificationResult, tier=2)
-            verifications.append(single_verification)
+            try:
+                single_verification = await llm_gateway.query_json(verify_prompt, VerificationResult, tier=2)
+                verifications.append(single_verification)
+            except Exception as e:
+                verifications.append(VerificationResult(
+                    claim_text=claim.claim_text,
+                    truth_status="BİLİNMİYOR",
+                    evidence_url="",
+                    contradiction_detail=f"Verifikasyon motoru hatası: {str(e)[:50]}"
+                ))
             
         # Skor hesapla
         total = len(verifications)

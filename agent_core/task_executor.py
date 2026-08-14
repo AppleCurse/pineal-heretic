@@ -137,7 +137,13 @@ class PinealExecutor:
                     raise
                 except Exception as e:
                     self._log("WARNING", f"[{task_id}] AGENT {agent_name} BASTARISIZ OLDU: {str(e)[:100]}. Zincir (Pipeline) devam ediyor...")
-                    continue  # Fallback: Ajan çöktüyse zinciri kırma, sonrakine geç
+                    
+                    # KRITIK: Kritik ajanlar çökerse zinciri KES - halüsinasyon önleme
+                    CRITICAL_AGENTS = ["mirror_truth", "human_behavior"]
+                    if agent_name in CRITICAL_AGENTS:
+                        raise InsufficientEvidenceError(f"Kritik ajan {agent_name} çöktü: {str(e)[:80]}")
+                    
+                    continue  # Fallback: Kritik olmayan ajan çöktüyse zincire devam et
 
                 check = self.uncertainty.evaluate(result, agent_name)
                 
@@ -173,9 +179,26 @@ class PinealExecutor:
             for agent_name in deferred:
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
-                result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
-                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
-                self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
+                
+                # KRITIK: pattern_interrupt sadece rezonans skoru yüksekse çalışır
+                if agent_name == "pattern_interrupt":
+                    # Resonance skorunu kontrol et
+                    resonance_result = None
+                    for ev in status.evidence_chain:
+                        if ev["agent"] == "resonance_calc":
+                            resonance_result = ev["result"]
+                            break
+                    
+                    if resonance_result and resonance_result.get("compatibility_score", 0) >= 0.70:
+                        result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
+                        status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                        self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
+                    else:
+                        self._log("ERROR", "[" + task_id + "] FREKANS_UYUSMAZLIGI: pattern_interrupt atlandi (dusuk rezonans)")
+                else:
+                    result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
+                    status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                    self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
 
             status.status = "completed"
             status.completed_at = datetime.now(timezone.utc)

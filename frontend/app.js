@@ -388,7 +388,15 @@ document.getElementById("btn-shadow").addEventListener("click", async () => {
             })
         });
         
-        const result = await response.json();
+        let result;
+        try {
+            result = await response.json();
+        } catch (err) {
+            alert("Sunucu Hatası: Gelen veri okunamadı (Muhtemelen API hatası).");
+            btn.disabled = false;
+            btn.innerText = "💀 GÖLGE MODU";
+            return;
+        }
         
         if (result.error) {
             alert(result.error);

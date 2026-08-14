@@ -33,14 +33,10 @@ class CognitiveRouter:
             agents.append('human_behavior')
             reasoning.append("Hedef mikro-analizi")
             
-            # Kullanıcı da hedef de varsa rezonans hesapla
             if has_user:
                 agents.append('resonance_calc')
                 reasoning.append("Frekans uyumu kontrolü")
-                
-                # Uyum yüksekse desen kır
-                agents.append('pattern_interrupt')
-                reasoning.append("Yüksek uyum - Mesaj üretimi")
+                # KRITIK: pattern_interrupt buraya eklenmez. task_executor karar verir.
         
         return RoutePlan(
             agents=agents,

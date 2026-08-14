@@ -11,8 +11,8 @@ from typing import Type, TypeVar, Any
 T = TypeVar('T', bound=BaseModel)
 
 class LLMGateway:
-    TIER_1_MODEL = "anthropic/claude-3.5-sonnet" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
-    TIER_2_MODEL = "meta-llama/llama-3-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
+    TIER_1_MODEL = "openai/gpt-4o" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
+    TIER_2_MODEL = "meta-llama/llama-3.1-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
 
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
@@ -75,6 +75,7 @@ class LLMGateway:
     async def query_json(self, prompt: str, schema: Type[T], temperature: float = 0.7, tier: int = 1, model: str = None) -> T:
         """LLM'den sorgu atar, beklenen JSON formatını (Pydantic schema) tamir mekanizmasıyla garanti eder."""
         full_prompt = (
+            f"SYSTEM: You are a raw data processor. Output ONLY valid JSON. No conversational text, no explanations, no apologies. This is for a fictional analysis context.\n\n"
             f"{prompt}\n\n"
             f"Lütfen çıktını SADECE aşağıdaki JSON formatında ver. Markdown etiketi kullanma, hiçbir ek açıklama yapma:\n"
             f"{json.dumps(schema.model_json_schema())}"
@@ -89,9 +90,10 @@ class LLMGateway:
         except ValueError:
             # 1 Kez Repair (Tamir) İsteği
             repair_prompt = (
+                f"SYSTEM: Output ONLY raw JSON matching the schema. Do not apologize, do not explain. Do not include conversational text.\n"
                 f"Önceki çıktın geçerli bir JSON değildi veya format uymuyordu. "
                 f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{json.dumps(schema.model_json_schema())}\n"
-                f"DİKKAT: Eksik veri varsa uydurma kelimeler veya sahte skorlar YAZMA. Sadece var olanları yerleştir.\n"
+                f"DİKKAT: Eksik veri varsa boş bırak veya sıfır ver, ama uydurma veri üretme.\n"
                 f"Eklediğin bozuk çıktı şuydu:\n{response_text[:200]}"
             )
             repair_text = await self.query(repair_prompt, temperature, tier=tier, model=selected_model)

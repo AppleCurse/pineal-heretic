@@ -37,12 +37,13 @@ class ShadowExecutor:
         # But wait! MirrorOfTruth needs LLMGateway in its newer signature. Actually MirrorOfTruth only needed LLMGateway in some versions, or maybe it instantiates its own.
         # Wait, in PinealExecutor `self.agents["mirror_truth"].execute` is called without LLM? No, wait, PinealExecutor calls:
         # await self.agents["mirror_truth"].execute({"target_behavior": human_result, ...}, memory, self.llm_gateway)
-        
         mirror_result = await self.mirror.execute(
             {
-                "user_rituals": task_input.get('user_profile', {}).get('rituals', []),
-                "user_music": task_input.get('user_profile', {}).get('music', ''),
-                "user_envies": task_input.get('user_profile', {}).get('envies', '')
+                "user_profile": {
+                    "private_rituals": task_input.get('user_profile', {}).get('rituals', []),
+                    "late_night_playlist": task_input.get('user_profile', {}).get('playlist', ''),
+                    "secret_envies": task_input.get('user_profile', {}).get('envies', '')
+                }
             }, 
             None, # No memory used for now
             self.llm_gateway

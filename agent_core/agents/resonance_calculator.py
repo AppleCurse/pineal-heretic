@@ -16,7 +16,7 @@ class ResonanceCalculator:
     Matematiksel rezonans.
     """
     
-    async def execute(self, input_data: Dict, memory) -> ResonanceProfile:
+    async def execute(self, input_data: Dict, memory, llm_gateway) -> ResonanceProfile:
         user_vector = input_data.get('user_authentic_vector', {'depth': 0.9, 'energy': 0.3})
         
         target_obj = input_data.get('target_analysis', {})
