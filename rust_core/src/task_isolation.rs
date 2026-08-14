@@ -3,7 +3,6 @@
 //! Her görevi bellek açısından izole eder, çapraz bulaşmayı engeller.
 
 use crate::event_bus::{EventBus, AgentEvent};
-use crate::chief::ChiefEngine;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -30,15 +29,13 @@ pub enum TaskStatus {
 /// Task Manager - İzole görev yürütücü
 pub struct TaskManager {
     event_bus: EventBus,
-    chief: Arc<Mutex<ChiefEngine>>,
     active_tasks: Arc<Mutex<std::collections::HashMap<Uuid, TaskContext>>>,
 }
 
 impl TaskManager {
-    pub fn new(event_bus: EventBus, chief: ChiefEngine) -> Self {
+    pub fn new(event_bus: EventBus) -> Self {
         Self {
             event_bus,
-            chief: Arc::new(Mutex::new(chief)),
             active_tasks: Arc::new(Mutex::new(std::collections::HashMap::new())),
         }
     }
@@ -144,13 +141,11 @@ impl TaskManager {
 mod tests {
     use super::*;
     use crate::event_bus::EventBus;
-    use crate::chief::ChiefEngine;
 
     #[tokio::test]
     async fn test_task_manager_isolation() {
         let event_bus = EventBus::new(100);
-        let chief = ChiefEngine::new(100);
-        let manager = TaskManager::new(event_bus, chief);
+        let manager = TaskManager::new(event_bus);
 
         // İki bağımsız görev başlat
         let result1 = manager.execute_isolated_task("https://example1.com".to_string()).await;

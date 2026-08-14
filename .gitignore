@@ -1,21 +1,14 @@
 ```
-# Rust/Cargo
-target/
-Cargo.lock
-**/gen/
-
-# Tauri
-**/tauri.conf.json
+# Tauri generated files
+rust_core/src-tauri/gen/
 
 # Dependencies
-**/node_modules/
+node_modules/
+target/
 
-# Build artifacts
-**/build/
-**/dist/
-
-# Logs
+# Logs and temp files
 *.log
+*.tmp
 
 # Environment
 .env
@@ -26,17 +19,16 @@ Cargo.lock
 .vscode/
 .idea/
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# Compiled files
-*.exe
-*.dll
-*.so
-*.dylib
-*.a
-*.lib
-*.obj
-*.o
+# Rust/Cargo
+Cargo.lock
+target/
+**/*.rs.bk
+
+# Build artifacts
+dist/
+build/
 ```
