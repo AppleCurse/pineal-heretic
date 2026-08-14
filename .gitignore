@@ -1,5 +1,17 @@
-venv/
-__pycache__/
-*.pyc
-.env
-memory/
+```
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Cargo lock file (uncomment if you want to commit it)
+# Cargo.lock
+
+# Unit test artifacts
+**/test_*.rs
+**/*_test.rs
+
+# Debug and release builds
+debug/
+release/
+
+```
