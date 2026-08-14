@@ -10,11 +10,13 @@ pub mod ghost;
 pub mod agent_pipeline;
 pub mod task_isolation;
 pub mod agents;
+pub mod aspasia;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
 pub use vault::{StealthVault, VaultError, EncryptedPayload};
 pub use event_bus::{EventBus, AgentEvent, TelemetryEvent, Severity as EventSeverity};
 pub use chief::{ChiefEngine, ExecutiveSummary};
+pub use aspasia::{AspasiaEngine, ASPASIA_SYSTEM_PROMPT};
 pub use ghost::GhostBrowser;
 pub use agents::mirror_truth::{MirrorTruthAgent, MirrorReflection};
 pub use agent_pipeline::{AgentNode, HaltReason, AnalysisResult};
