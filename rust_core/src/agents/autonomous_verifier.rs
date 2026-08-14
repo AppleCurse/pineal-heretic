@@ -6,6 +6,15 @@ use uuid::Uuid;
 /// Autonomous Verifier Ajanı
 /// Tavily arama motoru ile hedefin iddialarını doğrular.
 /// Veri veya API anahtarı yoksa UncertaintyEngine üzerinden Halt fırlatır.
+
+/// Verification Report - Doğrulama sonucu
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct VerifierReport {
+    pub verified: bool,
+    pub claims_checked: u32,
+    pub failed_claims: Vec<String>,
+}
+
 pub struct AutonomousVerifier {
     task_id: Uuid,
     event_bus: Arc<EventBus>,

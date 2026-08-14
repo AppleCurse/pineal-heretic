@@ -1,17 +1,54 @@
 ```
-# Rust build artifacts
+# Dependencies
 target/
-**/*.rs.bk
+Cargo.lock
 
-# Cargo lock file (uncomment if you want to commit it)
-# Cargo.lock
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+.venv/
+.env
+.env.local
+.env.*
 
-# Unit test artifacts
-**/test_*.rs
-**/*_test.rs
+# Compiled and build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+build/
+dist/
+*.class
 
-# Debug and release builds
-debug/
-release/
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
 
+# Editors
+.vscode/
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Testing
+.mypy_cache/
+.pytest_cache/
 ```

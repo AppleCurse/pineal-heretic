@@ -1,4 +1,21 @@
 use ndarray::{Array1, ArrayView1};
+use serde::{Deserialize, Serialize};
+
+/// Resonance Profile - Hesaplama sonucu
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResonanceProfile {
+    pub score: f64,
+    pub common_elements: Vec<String>,
+    pub resonance_type: ResonanceType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ResonanceType {
+    High,
+    Medium,
+    Low,
+    None,
+}
 
 /// Resonance Calculator Ajanı
 /// Kullanıcı ve hedef vektörleri arasındaki kosinüs benzerliğini hesaplar.
