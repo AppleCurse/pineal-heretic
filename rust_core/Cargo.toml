@@ -40,7 +40,7 @@ ndarray = "0.17.2"
 md5 = "0.8.1"
 
 # Tauri
-tauri = { version = "1", features = ["api-all"] }
+tauri = { version = "2", features = ["test"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

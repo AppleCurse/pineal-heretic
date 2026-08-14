@@ -2,17 +2,22 @@ use crate::uncertainty::{ConfidenceLevel, UncertaintyEngine, InsufficientEvidenc
 use crate::event_bus::{AgentEvent, EventBus, Severity};
 use std::sync::Arc;
 use uuid::Uuid;
+use serde::{Deserialize, Serialize};
 
-/// Autonomous Verifier Ajanı
-/// Tavily arama motoru ile hedefin iddialarını doğrular.
-/// Veri veya API anahtarı yoksa UncertaintyEngine üzerinden Halt fırlatır.
+/// VerificationResult - Tek bir iddia doğrulama sonucu
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationResult {
+    pub claim_text: String,
+    pub truth_status: String, // "DOĞRULANDI", "ÇELİŞKİLİ", "YALAN", "BİLİNMİYOR"
+    pub evidence_url: String,
+    pub contradiction_detail: String,
+}
 
 /// Verification Report - Doğrulama sonucu
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifierReport {
-    pub verified: bool,
-    pub claims_checked: u32,
-    pub failed_claims: Vec<String>,
+    pub verifications: Vec<VerificationResult>,
+    pub overall_authenticity_score: f32,
 }
 
 pub struct AutonomousVerifier {

@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::agent_pipeline::{AgentNode, AnalysisResult, HaltReason};
+use crate::agent_pipeline::{AnalysisResult, HaltReason};
 use crate::uncertainty::{ConfidenceLevel, UncertaintyEngine};
-use crate::event_bus::{AgentEvent, EventBus, TelemetryEvent};
+use crate::event_bus::{AgentEvent, EventBus};
 use uuid::Uuid;
 
 /// Mirror Reflection (Hedefin Çıktısı)
@@ -14,6 +14,13 @@ pub struct MirrorReflection {
     pub surface_persona: String,
     pub alignment_score: f32,
     pub authentic_anchors: Vec<String>,
+}
+
+/// AgentNode trait'i - Ajanların uygulaması gereken arayüz
+#[async_trait]
+pub trait AgentNodeTrait {
+    fn name(&self) -> &'static str;
+    async fn execute(&self, input: &str) -> Result<AnalysisResult, HaltReason>;
 }
 
 pub struct MirrorTruthAgent {
@@ -41,7 +48,7 @@ impl MirrorTruthAgent {
 }
 
 #[async_trait]
-impl AgentNode for MirrorTruthAgent {
+impl AgentNodeTrait for MirrorTruthAgent {
     fn name(&self) -> &'static str {
         "MirrorOfTruth"
     }
@@ -129,8 +136,11 @@ impl AgentNode for MirrorTruthAgent {
         });
 
         Ok(AnalysisResult {
+            task_id: task_id.to_string(),
             confidence: 0.95,
-            payload: serde_json::to_string(&reflection).unwrap(),
+            status: "completed".to_string(),
+            findings: vec!["Mirror truth analysis completed".to_string()],
+            payload: Some(serde_json::to_string(&reflection).unwrap()),
         })
     }
 }

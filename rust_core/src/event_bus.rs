@@ -68,6 +68,7 @@ pub struct TelemetryEvent {
 }
 
 /// Event Bus - merkezi dağıtıcı
+#[derive(Clone)]
 pub struct EventBus {
     sender: broadcast::Sender<TelemetryEvent>,
     _receiver_count: usize,
@@ -99,13 +100,18 @@ impl EventBus {
         self.sender.subscribe()
     }
 
+    /// Telemetri subscriber'ı oluştur (Tauri köprüsü için)
+    pub fn subscribe_telemetry(&self) -> broadcast::Receiver<TelemetryEvent> {
+        self.sender.subscribe()
+    }
+
     /// Event'i correlation_id ile bağla
     pub fn publish_with_correlation(
         &self,
         event: AgentEvent,
         correlation_id: Uuid,
     ) -> Result<(), broadcast::error::SendError<TelemetryEvent>> {
-        let mut telemetry = TelemetryEvent {
+        let telemetry = TelemetryEvent {
             timestamp: Utc::now(),
             event,
             correlation_id: Some(correlation_id),

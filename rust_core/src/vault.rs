@@ -174,6 +174,16 @@ impl Drop for StealthVault {
     }
 }
 
+/// StealthVault oluşturucu wrapper - Tauri için basitleştirilmiş
+impl StealthVault {
+    /// Yeni bir vault oluştur (default path ile)
+    pub fn new_default() -> Result<Self, VaultError> {
+        use std::env;
+        let vault_path = env::temp_dir().join("pineal_vault.age");
+        Self::new(&vault_path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
