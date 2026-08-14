@@ -60,32 +60,26 @@ impl AspasiaEngine {
     /// LLM API Çağrısı (Mock)
     /// Asıl projede `reqwest` ile OpenAI/Gemini'ye gidip ExecutiveSummary JSON'ını yollayıp doğal dil alacağız.
     async fn call_llm_for_natural_language(&self, summary: &ExecutiveSummary) -> Result<String, String> {
-        // Mock Persona Generation
         let response = if summary.system_health < 50 {
             format!(
-                "Şefim, kritik bir durumla karşı karşıyayız. Sistem sağlığı %{}. Son uyarı: '{}'. Tavsiyem: {}",
+                "Mösyö, incelemelerim sonucunda sistemde kritik bir uyuşmazlık tespit ettim. Sistem sağlığı %{}. Durum raporu: '{}'. Halüsinasyon veya tutarsızlık riskini almak yerine sistemi durdurmayı uygun gördüm.",
                 summary.system_health,
-                summary.status_message,
-                summary.recommended_actions.first().unwrap_or(&"Derhal müdahale edin.".to_string())
+                summary.status_message
             )
         } else if summary.system_health < 90 {
             format!(
-                "Şefim, hafif türbülans var ama kontrol altında. Sistem sağlığı %{}. Durum: '{}'. Şunu yapabiliriz: {}",
+                "Mösyö, sistem çalışıyor ancak bazı veri eksiklikleri tespit ettim. Sistem sağlığı %{}. Mevcut durum: '{}'. Bu aşamada temkinli ilerlemekte fayda var.",
                 summary.system_health,
-                summary.status_message,
-                summary.recommended_actions.first().unwrap_or(&"Beklemedeyiz.".to_string())
+                summary.status_message
             )
         } else {
             format!(
-                "Her şey kusursuz işliyor Şefim. Sistem sağlığı %{}. Güncel durum: '{}'. Sonraki adımı bekliyorum.",
+                "Teknik olarak sistem kusursuz işliyor, Mösyö. Sistem sağlığı %{}. İşlem sonucu: '{}'. Sizin açınızdan değişen şey: hedefin analiz hattı başarıyla tamamlandı.",
                 summary.system_health,
                 summary.status_message
             )
         };
 
-        // Network latency simülasyonu
-        // tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        
         Ok(response)
     }
 
@@ -136,7 +130,7 @@ mod tests {
         };
 
         let response1 = aspasia.process_and_report(telemetry1).await.unwrap();
-        assert!(response1.contains("Her şey kusursuz işliyor"));
+        assert!(response1.contains("Teknik olarak sistem kusursuz işliyor"));
         
         // 2. Kritik Hata (Kötü Durum)
         let telemetry2 = TelemetryEvent {
@@ -152,7 +146,7 @@ mod tests {
         };
 
         let response2 = aspasia.process_and_report(telemetry2).await.unwrap();
-        assert!(response2.contains("kritik bir durumla karşı karşıyayız"));
+        assert!(response2.contains("kritik bir uyuşmazlık tespit ettim"));
         assert!(response2.contains("Sistem sağlığı %20"));
     }
 }

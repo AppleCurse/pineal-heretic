@@ -19,5 +19,7 @@ pub use chief::{ChiefEngine, ExecutiveSummary};
 pub use aspasia::{AspasiaEngine, ASPASIA_SYSTEM_PROMPT};
 pub use ghost::GhostBrowser;
 pub use agents::mirror_truth::{MirrorTruthAgent, MirrorReflection};
+pub use agents::autonomous_verifier::{AutonomousVerifier, VerifierReport, VerificationResult};
+pub use agents::resonance_calculator::{ResonanceCalculator, ResonanceProfile};
 pub use agent_pipeline::{AgentNode, HaltReason, AnalysisResult};
 pub use task_isolation::{TaskManager, TaskContext};
