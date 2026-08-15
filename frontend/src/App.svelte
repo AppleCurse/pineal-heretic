@@ -7,7 +7,7 @@
   import RadarPanel from './components/RadarPanel.svelte';
   import VaultPanel from './components/VaultPanel.svelte';
   import RealAspasiaPanel from './components/RealAspasiaPanel.svelte';
-  import { scrapedUsername, scrapedBio, scrapedPosts, isScraping } from './store';
+  import { scrapedUsername, scrapedBio, scrapedPosts, isScraping, autoTriggerLLM } from './store';
 
   let telemetryData: any = null;
   let targetUrl = "";
@@ -53,6 +53,7 @@
           .map((p: any) => p.caption);
           
         scrapedPosts.set(postTexts);
+        autoTriggerLLM.set(true); // LLM analizini otomatik başlat
       }
     } catch (e) {
       telemetryData = { type: 'radar_alert', message: `ÇÖKME: ${e}` };

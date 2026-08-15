@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { scrapedUsername, scrapedBio, scrapedPosts } from '../store';
+  import { scrapedUsername, scrapedBio, scrapedPosts, autoTriggerLLM } from '../store';
   
   let username = '';
   let bio = '';
@@ -11,6 +11,14 @@
     if ($scrapedUsername) username = $scrapedUsername;
     if ($scrapedBio) bio = $scrapedBio;
     if ($scrapedPosts && $scrapedPosts.length > 0) posts = [...$scrapedPosts];
+    
+    // Eğer otomatik tetikleme bayrağı kalktıysa ve kullanıcı adı varsa analizi baslat
+    if ($autoTriggerLLM && username) {
+        autoTriggerLLM.set(false); // Bayrağı indir
+        setTimeout(() => {
+            analyzeReal(); // Asenkron tetikle
+        }, 500);
+    }
   }
 
   let analysis: any = null;
