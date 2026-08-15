@@ -18,3 +18,7 @@ release/
 venv/
 dist/
 target/
+
+# Vault Secrets
+.pineal_vault*
+rust_core/src-tauri/.pineal_vault*

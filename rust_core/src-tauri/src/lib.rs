@@ -5,6 +5,7 @@ use pineal_heretic_core::tauri_bridge::{CoreState, setup_telemetry_bridge};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use std::path::Path;
+use pineal_heretic_core::aspasia_bridge::{AspasiaBridge, analyze_with_aspasia};
 
 // Tauri komutları
 #[tauri::command]
@@ -46,6 +47,7 @@ pub fn run() {
         aspasia: Arc::new(Mutex::new(aspasia)),
         vault: Arc::new(Mutex::new(vault)),
         event_bus: event_bus.clone(),
+        aspasia_bridge: AspasiaBridge,
     };
     
     // Telemetri alıcısı oluştur
@@ -59,6 +61,7 @@ pub fn run() {
             start_analysis,
             query_aspasia,
             set_vault_credentials,
+            analyze_with_aspasia,
         ])
         .setup(move |app| {
             // Telemetri köprüsünü kur

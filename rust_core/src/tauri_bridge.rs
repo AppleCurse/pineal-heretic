@@ -15,6 +15,7 @@ pub struct CoreState {
     pub aspasia: Arc<Mutex<AspasiaEngine>>,
     pub vault: Arc<Mutex<StealthVault>>,
     pub event_bus: Arc<EventBus>,
+    pub aspasia_bridge: crate::aspasia_bridge::AspasiaBridge,
 }
 
 #[derive(Serialize, Clone)]

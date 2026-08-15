@@ -1,173 +1,268 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { onMount, afterUpdate } from 'svelte';
   
   export let telemetryData: any = {};
+
+  let targetData = {
+    bio: '',
+    posts: []
+  };
   
-  let messages: {sender: string, text: string}[] = [
-    { sender: 'ASPASIA', text: 'Sistem çevrimiçi. Emirlerinizi bekliyorum şefim.' }
-  ];
-  let inputMessage = "";
-  let chatContainer: HTMLElement;
+  let analysis: any = null;
+  let loading = false;
   
-  async function sendMessage() {
-    if (!inputMessage.trim()) return;
-    
-    messages = [...messages, { sender: 'SİZ', text: inputMessage }];
-    let currentInput = inputMessage;
-    inputMessage = "";
-    
+  async function analyzeTarget() {
+    loading = true;
     try {
-      // In Phase 4, we query Aspasia via Tauri IPC
-      const response: string = await invoke('query_aspasia');
-      messages = [...messages, { sender: 'ASPASIA', text: response }];
-    } catch (error) {
-      messages = [...messages, { sender: 'SİSTEM', text: `HATA: ${error}` }];
+      analysis = await invoke('analyze_with_aspasia', {
+        targetData: targetData
+      });
+      console.log(analysis);
+    } catch (e) {
+      console.error('Aspasia error:', e);
     }
+    loading = false;
   }
-  
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      sendMessage();
-    }
-  }
-  
-  afterUpdate(() => {
-    if (chatContainer) {
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-  });
 </script>
 
-<div class="panel aspasia-panel">
-  <div class="panel-header">
-    <h2>04 ASPASIA (DOĞAL DİL ARAYÜZÜ)</h2>
-    <div class="typing-indicator">...</div>
+<div class="aspasia-panel">
+  <h3>🧠 ASPASIA v5.0 (DOPAMINE ENGINE)</h3>
+  
+  <div class="input-section">
+    <textarea bind:value={targetData.bio} placeholder="Hedef bio..."></textarea>
+    <button on:click={analyzeTarget} disabled={loading}>
+      {loading ? 'Analyzing...' : 'ANALYZE TARGET'}
+    </button>
   </div>
   
-  <div class="panel-content">
-    <div class="chat-container" bind:this={chatContainer}>
-      {#each messages as msg}
-        <div class="message {msg.sender === 'SİZ' ? 'user' : 'aspasia'}">
-          <strong>[{msg.sender}]</strong> {msg.text}
+  {#if analysis}
+    <div class="results">
+      <div class="metrics-grid">
+        <div class="metric-card dark-triad">
+          <h4>Dark Triad</h4>
+          <div class="meter">
+            <label>Machiavellianism</label>
+            <progress value={analysis.psychological_profile.dark_triad.machiavellianism} max="1"></progress>
+          </div>
+          <div class="meter">
+            <label>Narcissism</label>
+            <progress value={analysis.psychological_profile.dark_triad.narcissism} max="1"></progress>
+          </div>
+          <div class="meter">
+            <label>Psychopathy</label>
+            <progress value={analysis.psychological_profile.dark_triad.psychopathy} max="1"></progress>
+          </div>
         </div>
-      {/each}
+
+        <div class="metric-card dopamine-profile">
+          <h4>Addiction Potential</h4>
+          <div class="meter alert">
+            <label>Exploitability</label>
+            <progress value={analysis.psychological_profile.exploitability} max="1"></progress>
+            <span>{(analysis.psychological_profile.exploitability * 100).toFixed(0)}%</span>
+          </div>
+          <div class="meter alert">
+            <label>Addiction Risk</label>
+            <progress value={analysis.strategy.addiction_potential} max="1"></progress>
+            <span>{(analysis.strategy.addiction_potential * 100).toFixed(0)}%</span>
+          </div>
+          <div class="meter alert">
+            <label>Compliance Prob.</label>
+            <progress value={analysis.strategy.compliance_probability} max="1"></progress>
+            <span>{(analysis.strategy.compliance_probability * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-row">
+        <span class="tag">Wound: {analysis.psychological_profile.core_wound}</span>
+        <span class="tag">Attachment: {analysis.psychological_profile.attachment}</span>
+        <span class="tag">Pacing: {analysis.dopamine_profile.optimal_schedule}</span>
+        <span class="tag warning">{analysis.warning}</span>
+      </div>
+      
+      <div class="strategy">
+        <h4>Interaction Sequence (Dopamine Loop)</h4>
+        <div class="sequence-list">
+          {#each analysis.strategy.sequence as step, i}
+            <div class="step-card {step.mechanism === 'jackpot' ? 'jackpot' : step.mechanism === 'near_miss' ? 'near-miss' : 'loss'}">
+              <div class="step-header">
+                <span class="step-num">[{i+1}] {step.phase}</span>
+                <span class="spike">Dopamine Spike: {(step.dopamine_spike).toFixed(1)}</span>
+                <span class="delay">Wait: {step.delay}s</span>
+              </div>
+              <p class="content">{step.content}</p>
+              <div class="mechanisms">
+                <small>{step.mechanism}</small>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
     </div>
-    
-    <div class="input-area">
-      <span class="prompt">></span>
-      <input type="text" bind:value={inputMessage} on:keydown={handleKeydown} placeholder="Komut girin..." />
-      <button on:click={sendMessage}>İLET</button>
-    </div>
-  </div>
+  {/if}
 </div>
 
 <style>
-  .panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    padding: 1rem;
-    color: #0f0;
-    font-family: 'Share Tech Mono', monospace;
-  }
-  
-  .panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1rem;
-  }
-  
-  h2 {
-    margin: 0;
-    font-size: 1.1rem;
-    letter-spacing: 2px;
-    text-shadow: 0 0 5px #0f0;
-  }
-  
-  .typing-indicator {
-    animation: blink 1s infinite;
-    color: #0f0;
-  }
-  
-  .panel-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-  }
-  
-  .chat-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0.5rem;
-    background: rgba(0, 20, 0, 0.5);
-    border: 1px solid rgba(0, 255, 0, 0.2);
-    margin-bottom: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  
-  .message {
-    padding: 0.5rem;
-    background: rgba(0, 255, 0, 0.1);
-    border-left: 2px solid #0f0;
-  }
-  
-  .message.user {
-    background: rgba(0, 100, 0, 0.3);
-    border-left: none;
-    border-right: 2px solid #0a0;
-    color: #0f0;
-    align-self: flex-end;
-    text-align: right;
-  }
-  
-  .input-area {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: rgba(0, 20, 0, 0.8);
+  .aspasia-panel {
+    background: rgba(10, 10, 10, 0.9);
     border: 1px solid #0f0;
-    padding: 0.5rem;
+    padding: 20px;
+    color: #0f0;
+    font-family: 'Share Tech Mono', 'Courier New', monospace;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
   }
   
-  .prompt {
-    font-weight: bold;
-    color: #0f0;
+  h3 {
+    margin-top: 0;
+    text-shadow: 0 0 5px #0f0;
+    text-align: center;
+    border-bottom: 1px solid #0f0;
+    padding-bottom: 10px;
+  }
+
+  h4 {
+    margin-top: 0;
+    color: #fff;
+    text-shadow: 0 0 3px #fff;
   }
   
-  input {
-    flex: 1;
-    background: transparent;
-    border: none;
+  .input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  textarea {
+    background: #000;
     color: #0f0;
+    border: 1px solid #0f0;
+    padding: 10px;
     font-family: inherit;
-    outline: none;
+    resize: vertical;
+    min-height: 80px;
   }
   
   button {
-    background: transparent;
-    color: #0f0;
-    border: 1px solid #0f0;
-    padding: 0.5rem 1rem;
+    background: #0f0;
+    color: #000;
+    border: none;
+    padding: 10px;
     font-weight: bold;
     cursor: pointer;
-    transition: all 0.2s;
+    text-transform: uppercase;
   }
   
   button:hover {
-    background: #0f0;
-    color: #000;
-    box-shadow: 0 0 10px #0f0;
+    background: #fff;
   }
   
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+  button:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .metric-card {
+    background: #111;
+    border: 1px dashed #0f0;
+    padding: 15px;
+  }
+  
+  .meter {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .meter label {
+    width: 140px;
+    font-size: 0.9em;
+  }
+  
+  progress {
+    flex-grow: 1;
+    height: 8px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+  }
+  
+  progress::-webkit-progress-value {
+    background: #0f0;
+    box-shadow: 0 0 5px #0f0;
+  }
+
+  .meter.alert progress::-webkit-progress-value {
+    background: #f00;
+    box-shadow: 0 0 5px #f00;
+  }
+
+  .info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .tag {
+    background: #0f0;
+    color: #000;
+    padding: 3px 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+  }
+
+  .tag.warning {
+    background: #f00;
+    color: #fff;
+  }
+
+  .sequence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step-card {
+    background: #1a1a1a;
+    border-left: 3px solid #0f0;
+    padding: 10px 15px;
+  }
+
+  .step-card.jackpot { border-left-color: #ff0; }
+  .step-card.near-miss { border-left-color: #f0f; }
+  .step-card.loss { border-left-color: #555; }
+
+  .step-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8em;
+    color: #888;
+    margin-bottom: 5px;
+  }
+
+  .step-num { color: #0f0; }
+  
+  .content {
+    margin: 5px 0;
+    color: #fff;
+  }
+
+  .mechanisms {
+    text-align: right;
+    color: #555;
   }
 </style>

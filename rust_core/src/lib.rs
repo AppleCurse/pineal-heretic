@@ -13,6 +13,7 @@ pub mod agents;
 pub mod aspasia;
 pub mod tauri_bridge;
 pub mod scrapers;
+pub mod aspasia_bridge;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
 pub use vault::{StealthVault, VaultError, EncryptedPayload};
