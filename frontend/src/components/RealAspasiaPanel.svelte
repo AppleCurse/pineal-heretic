@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/tauri';
+  import { invoke } from '@tauri-apps/api/core';
   
   let username = '';
   let bio = '';
   let posts: string[] = [];
-  let analysis = null;
+  let analysis: any = null;
   let loading = false;
   let error = '';
 
@@ -20,7 +20,7 @@
         bio,
         posts
       });
-    } catch (e) {
+    } catch (e: any) {
       error = e.toString();
     } finally {
       loading = false;
@@ -40,16 +40,16 @@
   <h2>🔴 GERÇEK ANALİZ (Şablon YOK)</h2>
 
   <div class="input-section">
-    <label>Kullanıcı Adı:</label>
-    <input bind:value={username} placeholder="@hedef_kisi" />
+    <label for="username">Kullanıcı Adı:</label>
+    <input id="username" bind:value={username} placeholder="@hedef_kisi" />
 
-    <label>Biyografi:</label>
-    <textarea bind:value={bio} placeholder="Hedefin biyografisi"></textarea>
+    <label for="bio">Biyografi:</label>
+    <textarea id="bio" bind:value={bio} placeholder="Hedefin biyografisi"></textarea>
 
-    <label>Son Paylaşımlar:</label>
+    <label for="posts">Son Paylaşımlar:</label>
     {#each posts as post, i}
       <div class="post-input">
-        <textarea bind:value={posts[i]} placeholder="Paylaşım metni {i + 1}"></textarea>
+        <textarea id="posts" bind:value={posts[i]} placeholder="Paylaşım metni {i + 1}"></textarea>
         <button on:click={() => removePost(i)}>Sil</button>
       </div>
     {/each}
