@@ -6,7 +6,7 @@
   import FrequencyPanel from './components/FrequencyPanel.svelte';
   import RadarPanel from './components/RadarPanel.svelte';
   import VaultPanel from './components/VaultPanel.svelte';
-  import AspasiaPanel from './components/AspasiaPanel.svelte';
+  import RealAspasiaPanel from './components/RealAspasiaPanel.svelte';
 
   let telemetryData: any = null;
   let targetUrl = "";
@@ -64,7 +64,7 @@
     <div class="panel-wrapper"><FrequencyPanel {telemetryData} /></div>
     <div class="panel-wrapper"><RadarPanel {telemetryData} /></div>
     <div class="panel-wrapper"><VaultPanel /></div>
-    <div class="panel-wrapper span-full"><AspasiaPanel /></div>
+    <div class="panel-wrapper span-full"><RealAspasiaPanel /></div>
   </div>
   
   <div class="scanlines"></div>
