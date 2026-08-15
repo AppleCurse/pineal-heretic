@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use crate::llm_client::LLMClient;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IntegratedResult {
@@ -118,4 +119,100 @@ pub async fn analyze_with_aspasia(
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnalysisResult {
+    pub real_desire: String,
+    pub specific_detail: String,
+    pub attachment_style: String,
+    pub core_wound: String,
+    pub first_message: String,
+    pub confidence: f32,
+}
+
+#[tauri::command]
+pub async fn analyze_target_real(
+    username: String,
+    bio: String,
+    posts: Vec<String>,
+    state: State<'_, crate::tauri_bridge::CoreState>,
+) -> Result<AnalysisResult, String> {
+    let vault_guard = state.vault.lock().await;
+    let api_key = if let Some(vault) = vault_guard.as_ref() {
+        vault.retrieve("OPENROUTER_API_KEY").unwrap_or_else(|_| "".to_string())
+    } else {
+        return Err("Vault kilitli veya erişilemiyor.".to_string());
+    };
+
+    if api_key.is_empty() {
+        return Err("API anahtarı kasada yok".to_string());
+    }
+
+    let client = LLMClient::new(api_key);
+    let response = client.analyze_target(&username, &bio, &posts).await?;
+
+    let result: AnalysisResult = serde_json::from_str(&response)
+        .map_err(|e| format!("LLM yanıtı JSON değil: {} - Ham yanıt: {}", e, response))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn consult_aspasia(
+    question: String,
+    target_context: String,
+    state: State<'_, crate::tauri_bridge::CoreState>,
+) -> Result<String, String> {
+    let vault_guard = state.vault.lock().await;
+    let api_key = if let Some(vault) = vault_guard.as_ref() {
+        vault.retrieve("OPENROUTER_API_KEY").unwrap_or_else(|_| "".to_string())
+    } else {
+        return Err("Vault kilitli veya erişilemiyor.".to_string());
+    };
+
+    if api_key.is_empty() {
+        return Err("API anahtarı kasada yok".to_string());
+    }
+
+    let prompt = format!(
+        r#"Sen Aspasia'sın - Mösyö'nün stratejik danışmanısın.
+
+HEDEF DOSYASI:
+{}
+
+MÖSYÖ'NÜN SORUSU: "{}"
+
+GÖREVİN:
+1. Hedef dosyasındaki spesifik detaylara referans ver
+2. Stratejik tavsiye ver (şablon kullanma)
+3. Samimi, profesyonel bir danışman gibi konuş
+4. Türkçe yanıt ver
+
+YANIT:""#,
+        target_context, question
+    );
+
+    let body = serde_json::json!({
+        "model": "anthropic/claude-3.5-sonnet",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 500,
+        "temperature": 0.8
+    });
+
+    let response = reqwest::Client::new()
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("API hatası: {}", e))?;
+
+    let json: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+    
+    json["choices"][0]["message"]["content"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Yanıt alınamadı".to_string())
 }

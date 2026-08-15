@@ -36,11 +36,13 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(core_state)
         .invoke_handler(tauri::generate_handler![
+            unlock_vault,
             start_analysis,
             query_aspasia,
             set_vault_credentials,
-            unlock_vault,
             analyze_with_aspasia,
+            analyze_target_real,
+            consult_aspasia,
         ])
         .setup(move |app| {
             // Telemetri köprüsünü kur

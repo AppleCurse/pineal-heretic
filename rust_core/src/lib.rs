@@ -14,6 +14,7 @@ pub mod aspasia;
 pub mod tauri_bridge;
 pub mod scrapers;
 pub mod aspasia_bridge;
+pub mod llm_client;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
 pub use vault::{StealthVault, VaultError};
