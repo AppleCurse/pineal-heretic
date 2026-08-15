@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   
-  export let telemetryData: any = {};
+
 
   let targetData = {
     bio: '',
@@ -41,34 +41,34 @@
         <div class="metric-card dark-triad">
           <h4>Dark Triad</h4>
           <div class="meter">
-            <label>Machiavellianism</label>
-            <progress value={analysis.psychological_profile.dark_triad.machiavellianism} max="1"></progress>
+            <label for="prog_mach">Machiavellianism</label>
+            <progress id="prog_mach" value={analysis.psychological_profile.dark_triad.machiavellianism} max="1"></progress>
           </div>
           <div class="meter">
-            <label>Narcissism</label>
-            <progress value={analysis.psychological_profile.dark_triad.narcissism} max="1"></progress>
+            <label for="prog_narc">Narcissism</label>
+            <progress id="prog_narc" value={analysis.psychological_profile.dark_triad.narcissism} max="1"></progress>
           </div>
           <div class="meter">
-            <label>Psychopathy</label>
-            <progress value={analysis.psychological_profile.dark_triad.psychopathy} max="1"></progress>
+            <label for="prog_psych">Psychopathy</label>
+            <progress id="prog_psych" value={analysis.psychological_profile.dark_triad.psychopathy} max="1"></progress>
           </div>
         </div>
 
         <div class="metric-card dopamine-profile">
           <h4>Addiction Potential</h4>
           <div class="meter alert">
-            <label>Exploitability</label>
-            <progress value={analysis.psychological_profile.exploitability} max="1"></progress>
+            <label for="prog_exp">Exploitability</label>
+            <progress id="prog_exp" value={analysis.psychological_profile.exploitability} max="1"></progress>
             <span>{(analysis.psychological_profile.exploitability * 100).toFixed(0)}%</span>
           </div>
           <div class="meter alert">
-            <label>Addiction Risk</label>
-            <progress value={analysis.strategy.addiction_potential} max="1"></progress>
+            <label for="prog_addict">Addiction Risk</label>
+            <progress id="prog_addict" value={analysis.strategy.addiction_potential} max="1"></progress>
             <span>{(analysis.strategy.addiction_potential * 100).toFixed(0)}%</span>
           </div>
           <div class="meter alert">
-            <label>Compliance Prob.</label>
-            <progress value={analysis.strategy.compliance_probability} max="1"></progress>
+            <label for="prog_comp">Compliance Prob.</label>
+            <progress id="prog_comp" value={analysis.strategy.compliance_probability} max="1"></progress>
             <span>{(analysis.strategy.compliance_probability * 100).toFixed(0)}%</span>
           </div>
         </div>

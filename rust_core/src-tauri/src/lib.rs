@@ -1,32 +1,12 @@
 use pineal_heretic_core::{
-    ChiefEngine, AspasiaEngine, EventBus, TaskManager, StealthVault,
+    ChiefEngine, AspasiaEngine, EventBus, TaskManager,
 };
-use pineal_heretic_core::tauri_bridge::{CoreState, setup_telemetry_bridge};
+use pineal_heretic_core::tauri_bridge::*;
+use pineal_heretic_core::aspasia_bridge::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::path::Path;
-use pineal_heretic_core::aspasia_bridge::{AspasiaBridge, analyze_with_aspasia};
 
-// Tauri komutları
-#[tauri::command]
-async fn start_analysis(target_url: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let result = state.task_manager.execute_isolated_task(target_url).await;
-    result.map_err(|e| format!("Analiz başlatılamadı: {}", e))
-}
 
-#[tauri::command]
-async fn query_aspasia(state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let mut aspasia = state.aspasia.lock().await;
-    let report = aspasia.report_system_overview().await;
-    Ok(report)
-}
-
-#[tauri::command]
-async fn set_vault_credentials(key: String, value: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let vault = state.vault.lock().await;
-    vault.store(&key, &value).map_err(|e| e.to_string())?;
-    Ok(format!("{} başarıyla kasaya şifrelenerek eklendi.", key))
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,15 +17,13 @@ pub fn run() {
     
     let aspasia = AspasiaEngine::new(chief, "dummy_api_key".to_string());
     
-    let vault = StealthVault::new(Path::new(".pineal_vault")).expect("Vault oluşturulamadı");
-    
     let task_manager = TaskManager::new();
     
-    // CoreState oluştur
+    // CoreState oluştur (Vault başlangıçta kilitli)
     let core_state = CoreState {
         task_manager: Arc::new(task_manager),
         aspasia: Arc::new(Mutex::new(aspasia)),
-        vault: Arc::new(Mutex::new(vault)),
+        vault: Arc::new(Mutex::new(None)),
         event_bus: event_bus.clone(),
         aspasia_bridge: AspasiaBridge,
     };
@@ -61,11 +39,12 @@ pub fn run() {
             start_analysis,
             query_aspasia,
             set_vault_credentials,
+            unlock_vault,
             analyze_with_aspasia,
         ])
         .setup(move |app| {
             // Telemetri köprüsünü kur
-            use tauri::Manager;
+            
             let app_handle = app.handle().clone();
             setup_telemetry_bridge(app_handle, telemetry_rx);
             Ok(())

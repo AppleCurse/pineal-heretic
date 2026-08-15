@@ -63,8 +63,8 @@
   <div class="grid-layout">
     <div class="panel-wrapper"><FrequencyPanel {telemetryData} /></div>
     <div class="panel-wrapper"><RadarPanel {telemetryData} /></div>
-    <div class="panel-wrapper"><VaultPanel {telemetryData} /></div>
-    <div class="panel-wrapper span-full"><AspasiaPanel {telemetryData} /></div>
+    <div class="panel-wrapper"><VaultPanel /></div>
+    <div class="panel-wrapper span-full"><AspasiaPanel /></div>
   </div>
   
   <div class="scanlines"></div>

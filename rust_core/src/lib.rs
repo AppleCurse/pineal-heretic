@@ -16,7 +16,7 @@ pub mod scrapers;
 pub mod aspasia_bridge;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
-pub use vault::{StealthVault, VaultError, EncryptedPayload};
+pub use vault::{StealthVault, VaultError};
 pub use event_bus::{EventBus, AgentEvent, TelemetryEvent, Severity as EventSeverity};
 pub use chief::{ChiefEngine, ExecutiveSummary};
 pub use aspasia::{AspasiaEngine, ASPASIA_SYSTEM_PROMPT};

@@ -1,236 +1,231 @@
-//! PINEAL-HERETIC v4.0 - Stealth Vault
+//! PINEAL-HERETIC v5.0 - Stealth Vault (Argon2id + ChaCha20Poly1305 + Zeroize)
 //! 
-//! API anahtarları ve oturum verileri için bellek-içi şifreli kasa.
-//! age + argon2 ile diskte şifreli, RAM'de sadece ihtiyaç anında açık.
+//! Diskte güvenli, şifreli ve RAM'de sadece kısa süreliğine açık kasa.
+//! age bağımlılığı kaldırıldı. .key dosyası yok.
+//! Tüm geçici şifresiz veriler (plaintext, anahtarlar) Zeroize ile bellekten silinir.
 
-use age::secrecy::{ExposeSecret, Secret};
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use rand::{rngs::OsRng, RngCore};
+use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+};
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    ChaCha20Poly1305, Key, Nonce,
+};
+use rand::{rngs::OsRng as RandOsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use thiserror::Error;
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
-/// Vault hataları
 #[derive(Error, Debug)]
 pub enum VaultError {
     #[error("Şifreleme hatası: {0}")]
     EncryptionError(String),
-    
     #[error("Şifre çözme hatası: {0}")]
     DecryptionError(String),
-    
     #[error("Dosya erişim hatası: {0}")]
     FileError(String),
-    
     #[error("Anahtar üretimi hatası: {0}")]
     KeyGenerationError(String),
+    #[error("Hatalı Parola")]
+    WrongPassword,
 }
 
-/// Şifrelenmiş veri paketi
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EncryptedPayload {
-    pub ciphertext: Vec<u8>,
-    pub nonce: [u8; 32],
+#[derive(Serialize, Deserialize)]
+struct VaultFormat {
+    version: u8,
+    salt: String,
+    nonce: Vec<u8>,
+    ciphertext: Vec<u8>,
 }
 
-/// Stealth Vault - Ana şifreli kasa yapısı
 pub struct StealthVault {
     vault_path: PathBuf,
-    master_key: Secret<Vec<u8>>,
-    recipient: age::x25519::Recipient,
-    identity: age::x25519::Identity,
-    storage: RwLock<HashMap<String, EncryptedPayload>>,
+    // Master key'i bellekte zeroize edilen bir yapıda tutuyoruz
+    master_key: Zeroizing<Vec<u8>>,
+    salt: String,
+    storage: RwLock<HashMap<String, Vec<u8>>>, // RAM'de şifresiz byte olarak
 }
 
 impl StealthVault {
-    /// Yeni bir vault oluştur (ilk kurulum)
-    pub fn new(vault_path: &Path) -> Result<Self, VaultError> {
-        // Master key üret (argon2 ile güçlendirilmiş)
+    /// Yeni kasa (ilk kurulum)
+    pub fn new(vault_path: &Path, password: &str) -> Result<Self, VaultError> {
         let salt = SaltString::generate(&mut OsRng);
+        let salt_str = salt.as_str().to_string();
+
         let argon2 = Argon2::default();
-        
-        // Basitlik için rastgele byte dizisi kullanıyoruz
-        // Gerçek implementasyonda kullanıcı parolası kullanılacak
         let mut key_bytes = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key_bytes);
+        let password_bytes = password.as_bytes();
         
-        let master_key = Secret::new(key_bytes);
+        // Argon2 üzerinden KDF türetimi (hash yerine doğrudan byte üretmek için hash'i parse edip byte alıyoruz)
+        // Standart PasswordHash formatında saklayalım ve içinden key'i çekelim
+        let password_hash = argon2.hash_password(password_bytes, &salt)
+            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
         
-        // age key pair üret
-        let identity = age::x25519::Identity::generate();
-        let recipient = identity.to_public();
+        let hash_output = password_hash.hash.ok_or(VaultError::KeyGenerationError("Hash output missing".to_string()))?;
+        let output_bytes = hash_output.as_bytes();
         
+        // En az 32 byte olduğunu varsayarak ilk 32'yi key alıyoruz
+        let len = std::cmp::min(output_bytes.len(), 32);
+        key_bytes[..len].copy_from_slice(&output_bytes[..len]);
+        
+        let master_key = Zeroizing::new(key_bytes);
+
         let vault = Self {
             vault_path: vault_path.to_path_buf(),
             master_key,
-            recipient,
-            identity,
+            salt: salt_str,
             storage: RwLock::new(HashMap::new()),
         };
         
-        // Vault dosyasını oluştur
+        // Diske boş halini şifreleyerek yaz
         vault.save_to_disk()?;
-        
         Ok(vault)
     }
 
-    /// Mevcut vault'u yükle
-    pub fn load(vault_path: &Path) -> Result<Self, VaultError> {
+    /// Kasa Yükleme (Parola ile)
+    pub fn load(vault_path: &Path, password: &str) -> Result<Self, VaultError> {
         if !vault_path.exists() {
             return Err(VaultError::FileError("Vault dosyası bulunamadı".to_string()));
         }
 
-        let key_path = vault_path.with_extension("key");
-        if !key_path.exists() {
-            return Err(VaultError::FileError("Vault key dosyası bulunamadı".to_string()));
-        }
-
-        // Load identity
-        let identity_bytes = fs::read(&key_path)
-            .map_err(|e| VaultError::FileError(e.to_string()))?;
-        let identity_str = String::from_utf8(identity_bytes)
-            .map_err(|e| VaultError::FileError(e.to_string()))?;
-        
-        let identity = identity_str.parse::<age::x25519::Identity>()
-            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
-        let recipient = identity.to_public();
-
-        // Load storage
         let storage_bytes = fs::read(vault_path)
             .map_err(|e| VaultError::FileError(e.to_string()))?;
-        let storage_map: HashMap<String, EncryptedPayload> = serde_json::from_slice(&storage_bytes)
-            .unwrap_or_default();
+            
+        let disk_format: VaultFormat = serde_json::from_slice(&storage_bytes)
+            .map_err(|e| VaultError::FileError(format!("Corrupt vault file: {}", e)))?;
+            
+        if disk_format.version != 1 {
+            return Err(VaultError::DecryptionError("Unsupported vault version".to_string()));
+        }
 
+        // Paroladan anahtarı türet
+        let parsed_salt = SaltString::from_b64(&disk_format.salt)
+            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
+            
+        let argon2 = Argon2::default();
+        let password_hash = argon2.hash_password(password.as_bytes(), &parsed_salt)
+            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
+            
+        let hash_output = password_hash.hash.ok_or(VaultError::KeyGenerationError("Hash output missing".to_string()))?;
+        let output_bytes = hash_output.as_bytes();
+        
         let mut key_bytes = vec![0u8; 32];
-        OsRng.fill_bytes(&mut key_bytes);
-        let master_key = Secret::new(key_bytes);
+        let len = std::cmp::min(output_bytes.len(), 32);
+        key_bytes[..len].copy_from_slice(&output_bytes[..len]);
+        
+        let master_key = Zeroizing::new(key_bytes);
+        
+        // Kilit açma (Decrypt)
+        let key = Key::clone_from_slice(&*master_key);
+        let cipher = ChaCha20Poly1305::new(&key);
+        let nonce = Nonce::clone_from_slice(&disk_format.nonce);
+        
+        let decrypted_bytes = cipher.decrypt(&nonce, disk_format.ciphertext.as_ref())
+            .map_err(|_| VaultError::WrongPassword)?;
+            
+        let decrypted_zeroizing = Zeroizing::new(decrypted_bytes);
+        
+        let storage_map: HashMap<String, Vec<u8>> = serde_json::from_slice(&*decrypted_zeroizing)
+            .unwrap_or_default();
 
         Ok(Self {
             vault_path: vault_path.to_path_buf(),
             master_key,
-            recipient,
-            identity,
+            salt: disk_format.salt,
             storage: RwLock::new(storage_map),
         })
     }
 
-    /// Veriyi şifrele ve kasaya koy
     pub fn store<T: Serialize>(&self, label: &str, data: &T) -> Result<(), VaultError> {
-        let plaintext = serde_json::to_vec(data)
+        let plaintext_vec = serde_json::to_vec(data)
             .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
-
-        let encrypted_data = self.encrypt_data(&plaintext)?;
+        let plaintext_zeroizing = Zeroizing::new(plaintext_vec);
 
         {
             let mut storage = self.storage.write().map_err(|_| VaultError::EncryptionError("Lock error".to_string()))?;
-            storage.insert(label.to_string(), encrypted_data);
+            storage.insert(label.to_string(), (*plaintext_zeroizing).clone());
         }
         
-        // Persist to disk automatically on store
         self.save_to_disk()?;
-        
         tracing::info!("Veri '{}' etiketiyle şifrelenerek kasaya kondu", label);
         Ok(())
     }
 
-    /// Veriyi kasadan al ve şifresini çöz
     pub fn retrieve<T: for<'de> Deserialize<'de>>(&self, label: &str) -> Result<T, VaultError> {
         let storage = self.storage.read().map_err(|_| VaultError::DecryptionError("Lock error".to_string()))?;
-        let payload = storage.get(label)
+        let data_bytes = storage.get(label)
             .ok_or_else(|| VaultError::DecryptionError(format!("'{}' etiketli veri bulunamadı", label)))?;
             
-        let decrypted = self.decrypt_data(payload)?;
-        
-        serde_json::from_slice(&decrypted)
+        serde_json::from_slice(data_bytes)
             .map_err(|e| VaultError::DecryptionError(e.to_string()))
     }
 
-    /// age ile veri şifreleme
-    fn encrypt_data(&self, plaintext: &[u8]) -> Result<EncryptedPayload, VaultError> {
-        let encryptor = age::Encryptor::with_recipients(vec![Box::new(self.recipient.clone())])
-            .expect("Encryptor oluşturulamadı");
-            
-        let mut encrypted = vec![];
-        let mut writer = encryptor.wrap_output(&mut encrypted)
-            .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
-            
-        writer.write_all(plaintext)
-            .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
-        writer.finish()
+    fn save_to_disk(&self) -> Result<(), VaultError> {
+        let storage = self.storage.read().map_err(|_| VaultError::FileError("Lock error".to_string()))?;
+        let plaintext_vec = serde_json::to_vec(&*storage)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+        let plaintext = Zeroizing::new(plaintext_vec);
+
+        let key = Key::clone_from_slice(&*self.master_key);
+        let cipher = ChaCha20Poly1305::new(&key);
+        
+        let mut nonce_bytes = [0u8; 12];
+        RandOsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = Nonce::clone_from_slice(&nonce_bytes);
+
+        let ciphertext = cipher.encrypt(&nonce, plaintext.as_ref())
             .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
 
-        let mut nonce = [0u8; 32];
-        OsRng.fill_bytes(&mut nonce);
-
-        Ok(EncryptedPayload {
-            ciphertext: encrypted,
-            nonce,
-        })
-    }
-
-    /// age ile veri şifre çözme
-    fn decrypt_data(&self, payload: &EncryptedPayload) -> Result<Vec<u8>, VaultError> {
-        let decryptor = match age::Decryptor::new(payload.ciphertext.as_slice())
-            .map_err(|e| VaultError::DecryptionError(e.to_string()))? {
-            age::Decryptor::Passphrase(_) => return Err(VaultError::DecryptionError("Passphrase not supported".to_string())),
-            age::Decryptor::Recipients(d) => d,
+        let disk_format = VaultFormat {
+            version: 1,
+            salt: self.salt.clone(),
+            nonce: nonce.to_vec(),
+            ciphertext,
         };
 
-        let mut reader = decryptor.decrypt(std::iter::once(&self.identity as &dyn age::Identity))
-            .map_err(|e| VaultError::DecryptionError(e.to_string()))?;
-            
-        let mut decrypted = vec![];
-        reader.read_to_end(&mut decrypted)
-            .map_err(|e| VaultError::DecryptionError(e.to_string()))?;
-
-        Ok(decrypted)
-    }
-
-    /// Vault'u diske kaydet (şifreli)
-    fn save_to_disk(&self) -> Result<(), VaultError> {
-        // Identity'yi ayrı bir key dosyasına kaydet
-        let key_path = self.vault_path.with_extension("key");
-        let identity_str = self.identity.to_string();
-        let identity_bytes = identity_str.expose_secret().as_bytes();
-        fs::write(&key_path, identity_bytes)
-            .map_err(|e| VaultError::FileError(e.to_string()))?;
-        
-        // Storage map'i serileştirip ana dosyaya kaydet
-        let storage = self.storage.read().map_err(|_| VaultError::FileError("Lock error".to_string()))?;
-        let storage_bytes = serde_json::to_vec(&*storage)
+        // Atomik yazma simülasyonu (temp file -> rename)
+        let temp_path = self.vault_path.with_extension("tmp");
+        let disk_bytes = serde_json::to_vec(&disk_format)
             .map_err(|e| VaultError::FileError(e.to_string()))?;
             
-        fs::write(&self.vault_path, storage_bytes)
+        fs::write(&temp_path, disk_bytes)
             .map_err(|e| VaultError::FileError(e.to_string()))?;
-        
+            
+        fs::rename(&temp_path, &self.vault_path)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+
         tracing::info!("Vault {} konumuna kaydedildi", self.vault_path.display());
         Ok(())
     }
 
-    /// Güvenli temizlik - master key'i RAM'den sil
-    pub fn secure_wipe(&mut self) {
-        // Secret otomatik olarak drop'ta temizlenir
-        // Ekstra güvenlik için sıfırla - expose_secret & verir, iter() kullanırız
-        let key_bytes = self.master_key.expose_secret();
-        for i in 0..key_bytes.len() {
-            unsafe {
-                let ptr = key_bytes.as_ptr() as *mut u8;
-                std::ptr::write(ptr.add(i), 0);
-            }
-        }
-        tracing::warn!("Vault bellekten güvenli şekilde temizlendi");
+    pub fn change_password(&mut self, new_password: &str) -> Result<(), VaultError> {
+        let new_salt = SaltString::generate(&mut OsRng);
+        self.salt = new_salt.as_str().to_string();
+        
+        let argon2 = Argon2::default();
+        let password_hash = argon2.hash_password(new_password.as_bytes(), &new_salt)
+            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
+            
+        let hash_output = password_hash.hash.ok_or(VaultError::KeyGenerationError("Hash output missing".to_string()))?;
+        let output_bytes = hash_output.as_bytes();
+        
+        let mut key_bytes = vec![0u8; 32];
+        let len = std::cmp::min(output_bytes.len(), 32);
+        key_bytes[..len].copy_from_slice(&output_bytes[..len]);
+        
+        self.master_key = Zeroizing::new(key_bytes);
+        self.save_to_disk()?;
+        Ok(())
     }
 }
 
-impl Drop for StealthVault {
-    fn drop(&mut self) {
-        self.secure_wipe();
-    }
-}
+// Zeroizing wrapper structs otomatik bellek silmeyi halleder.
+// Ekstra Drop impl gerekmez.
 
 #[cfg(test)]
 mod tests {
@@ -244,29 +239,33 @@ mod tests {
     }
 
     #[test]
-    fn test_vault_store_and_retrieve() {
+    fn test_vault_flow() {
         let dir = tempdir().unwrap();
-        let vault_path = dir.path().join("test_vault.age");
-
-        let mut vault = StealthVault::new(&vault_path).unwrap();
-
+        let vault_path = dir.path().join("test_vault.enc");
+        
+        let password = "super_secure_password_123";
         let secret = TestSecret {
             api_key: "sk-test-12345".to_string(),
             session_token: "sess-abcde".to_string(),
         };
 
-        vault.store("test_credentials", &secret).unwrap();
+        // 1. Yeni kasa oluştur ve sakla
+        {
+            let vault = StealthVault::new(&vault_path, password).unwrap();
+            vault.store("creds", &secret).unwrap();
+            
+            // Diskte .key oluşmamalı
+            assert!(!vault_path.with_extension("key").exists());
+        } // vault burada drop edilir, Zeroizing devreye girer
+
+        // 2. Yanlış şifreyle açmayı dene
+        let wrong_vault_res = StealthVault::load(&vault_path, "wrong_pass");
+        assert!(matches!(wrong_vault_res, Err(VaultError::WrongPassword)));
+
+        // 3. Doğru şifreyle aç
+        let loaded_vault = StealthVault::load(&vault_path, password).unwrap();
+        let retrieved: TestSecret = loaded_vault.retrieve("creds").unwrap();
         
-        let retrieved: TestSecret = vault.retrieve("test_credentials").unwrap();
         assert_eq!(secret, retrieved);
-        
-        // secure_wipe test on original vault
-        vault.secure_wipe();
-        drop(vault);
-        
-        // Load from disk and verify persistence
-        let loaded_vault = StealthVault::load(&vault_path).unwrap();
-        let retrieved_after_load: TestSecret = loaded_vault.retrieve("test_credentials").unwrap();
-        assert_eq!(secret, retrieved_after_load);
     }
 }

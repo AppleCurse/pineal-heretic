@@ -1,6 +1,9 @@
 use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use crate::event_bus::EventBus;
+use crate::agents::autonomous_verifier::AutonomousVerifier;
+use crate::agent_pipeline::AgentNode;
 
 #[derive(Debug, Clone)]
 pub struct TaskContext {
@@ -33,8 +36,14 @@ impl TaskManager {
         self.tasks.lock().unwrap().get(task_id).cloned()
     }
 
-    pub async fn execute_isolated_task(&self, target_url: String) -> Result<String, String> {
+    pub async fn execute_isolated_task(&self, target_url: String, event_bus: Arc<EventBus>) -> Result<String, String> {
         let task_id = self.create_task();
-        Ok(format!("Task {} started for {}", task_id, target_url))
+        let verifier = AutonomousVerifier::new(event_bus);
+        
+        // Gerçek OSINT taramasını ve telemetry'yi tetikler
+        let result = verifier.execute(&target_url).await
+            .map_err(|e| format!("Görev {} başarısız oldu: {:?}", task_id, e))?;
+            
+        Ok(format!("Görev {} tamamlandı. Bulgu: {}", task_id, result.payload))
     }
 }

@@ -1,13 +1,28 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   
-  export let telemetryData: any = {};
-  
   let keyInput = "";
   let valInput = "";
-  let vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
+  let masterPassword = "";
+  let vaultStatus = "KİLİTLİ (PAROLA BEKLENİYOR)";
   let vaultLog = "";
-  
+  let isUnlocked = false;
+
+  async function unlockVault() {
+    if (!masterPassword) return;
+    try {
+      vaultStatus = "KİLİT AÇILIYOR...";
+      const res: string = await invoke('unlock_vault', { password: masterPassword });
+      vaultLog = res;
+      vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
+      isUnlocked = true;
+      masterPassword = ""; // Clear password from UI memory
+    } catch(err) {
+      vaultLog = `HATA: ${err}`;
+      vaultStatus = "İHLAL RİSKİ";
+    }
+  }
+
   async function sealCredentials() {
     try {
       vaultStatus = "MÜHÜRLENİYOR...";
@@ -26,7 +41,7 @@
 <div class="panel vault-panel">
   <div class="panel-header">
     <h2>03 GİZLİ KASA</h2>
-    <div class="lock-icon">🔒</div>
+    <div class="lock-icon">{isUnlocked ? '🔓' : '🔒'}</div>
   </div>
   
   <div class="panel-content">
@@ -34,11 +49,18 @@
       DURUM: {vaultStatus}
     </div>
     
-    <div class="form-group">
-      <input type="text" bind:value={keyInput} placeholder="Anahtar (Örn: OPENAI_API_KEY)" />
-      <input type="password" bind:value={valInput} placeholder="Değer (Gizli)" />
-      <button on:click={sealCredentials}>KASAYA MÜHÜRLE</button>
-    </div>
+    {#if !isUnlocked}
+      <div class="form-group">
+        <input type="password" bind:value={masterPassword} placeholder="Master Parola (Zorunlu)" />
+        <button on:click={unlockVault}>KİLİDİ AÇ / OLUŞTUR</button>
+      </div>
+    {:else}
+      <div class="form-group">
+        <input type="text" bind:value={keyInput} placeholder="Anahtar (Örn: OPENAI_API_KEY)" />
+        <input type="password" bind:value={valInput} placeholder="Değer (Gizli)" />
+        <button on:click={sealCredentials}>KASAYA MÜHÜRLE</button>
+      </div>
+    {/if}
     
     {#if vaultLog}
       <div class="vault-log">> {vaultLog}</div>
