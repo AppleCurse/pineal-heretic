@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ pub struct CoreState {
     pub task_manager: Arc<TaskManager>,
     pub aspasia: Arc<Mutex<AspasiaEngine>>,
     pub vault: Arc<Mutex<StealthVault>>,
-    pub event_bus: EventBus,
+    pub event_bus: Arc<EventBus>,
 }
 
 #[derive(Serialize, Clone)]
@@ -58,7 +58,7 @@ pub fn setup_telemetry_bridge(app_handle: AppHandle, mut rx: tokio::sync::broadc
                 };
                 
                 // Tauri arayüzüne (Svelte) gönder
-                let _ = app_handle.emit_all("pineal-telemetry", payload);
+                let _ = app_handle.emit("pineal-telemetry", payload);
             }
         }
     });
