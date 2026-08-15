@@ -1,39 +1,25 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   
-  let keyInput = "";
   let valInput = "";
-  let masterPassword = "";
-  let vaultStatus = "KİLİTLİ (PAROLA BEKLENİYOR)";
+  let vaultStatus = "API ANAHTARI BEKLENİYOR";
   let vaultLog = "";
-  let isUnlocked = false;
 
-  async function unlockVault() {
-    if (!masterPassword) return;
+  async function saveCredentials() {
+    if (!valInput) return;
     try {
-      vaultStatus = "KİLİT AÇILIYOR...";
-      const res: string = await invoke('unlock_vault', { password: masterPassword });
-      vaultLog = res;
-      vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
-      isUnlocked = true;
-      masterPassword = ""; // Clear password from UI memory
-    } catch(err) {
-      vaultLog = `HATA: ${err}`;
-      vaultStatus = "İHLAL RİSKİ";
-    }
-  }
-
-  async function sealCredentials() {
-    try {
-      vaultStatus = "MÜHÜRLENİYOR...";
-      const res: string = await invoke('set_vault_credentials', { key: keyInput, value: valInput });
-      vaultLog = res;
-      vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
-      keyInput = "";
+      vaultStatus = "KAYDEDİLİYOR...";
+      // Arka planda otomatik şifre ile kasayı aç
+      await invoke('unlock_vault', { password: "pineal_default_admin" });
+      
+      // API Anahtarını kaydet
+      const res: string = await invoke('set_vault_credentials', { key: "OPENROUTER_API_KEY", value: valInput });
+      vaultLog = "API Anahtarı başarıyla sisteme gömüldü!";
+      vaultStatus = "SİSTEM AKTİF";
       valInput = "";
     } catch(err) {
       vaultLog = `HATA: ${err}`;
-      vaultStatus = "İHLAL RİSKİ";
+      vaultStatus = "BAĞLANTI HATASI";
     }
   }
 </script>
@@ -41,7 +27,7 @@
 <div class="panel vault-panel">
   <div class="panel-header">
     <h2>03 GİZLİ KASA</h2>
-    <div class="lock-icon">{isUnlocked ? '🔓' : '🔒'}</div>
+    <div class="lock-icon">🔓</div>
   </div>
   
   <div class="panel-content">
@@ -49,18 +35,10 @@
       DURUM: {vaultStatus}
     </div>
     
-    {#if !isUnlocked}
-      <div class="form-group">
-        <input type="password" bind:value={masterPassword} placeholder="Master Parola (Zorunlu)" />
-        <button on:click={unlockVault}>KİLİDİ AÇ / OLUŞTUR</button>
-      </div>
-    {:else}
-      <div class="form-group">
-        <input type="text" bind:value={keyInput} placeholder="Anahtar (Örn: OPENAI_API_KEY)" />
-        <input type="password" bind:value={valInput} placeholder="Değer (Gizli)" />
-        <button on:click={sealCredentials}>KASAYA MÜHÜRLE</button>
-      </div>
-    {/if}
+    <div class="form-group">
+      <input type="password" bind:value={valInput} placeholder="OpenRouter API Key Girin" />
+      <button on:click={saveCredentials}>SİSTEME KAYDET</button>
+    </div>
     
     {#if vaultLog}
       <div class="vault-log">> {vaultLog}</div>
