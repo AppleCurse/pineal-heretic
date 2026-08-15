@@ -150,7 +150,14 @@ pub async fn analyze_target_real(
     }
 
     let client = LLMClient::new(api_key);
-    let response = client.analyze_target(&username, &bio, &posts).await?;
+    let mut response = client.analyze_target(&username, &bio, &posts).await?;
+
+    // Daha sağlam JSON temizliği: İlk '{' ve son '}' arasını al
+    if let (Some(start), Some(end)) = (response.find('{'), response.rfind('}')) {
+        response = response[start..=end].to_string();
+    } else {
+        return Err(format!("LLM yanıtında JSON bulunamadı. Ham yanıt: {}", response));
+    }
 
     let result: AnalysisResult = serde_json::from_str(&response)
         .map_err(|e| format!("LLM yanıtı JSON değil: {} - Ham yanıt: {}", e, response))?;
