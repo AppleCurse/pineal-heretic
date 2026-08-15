@@ -8,7 +8,7 @@ use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -84,9 +84,38 @@ impl StealthVault {
             return Err(VaultError::FileError("Vault dosyası bulunamadı".to_string()));
         }
 
-        // TODO: Şifreli dosyadan identity'yi yükle
-        // Şimdilik yeni oluşturuyoruz (demo amaçlı)
-        Self::new(vault_path)
+        let key_path = vault_path.with_extension("key");
+        if !key_path.exists() {
+            return Err(VaultError::FileError("Vault key dosyası bulunamadı".to_string()));
+        }
+
+        // Load identity
+        let identity_bytes = fs::read(&key_path)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+        let identity_str = String::from_utf8(identity_bytes)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+        
+        let identity = identity_str.parse::<age::x25519::Identity>()
+            .map_err(|e| VaultError::KeyGenerationError(e.to_string()))?;
+        let recipient = identity.to_public();
+
+        // Load storage
+        let storage_bytes = fs::read(vault_path)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+        let storage_map: HashMap<String, EncryptedPayload> = serde_json::from_slice(&storage_bytes)
+            .unwrap_or_default();
+
+        let mut key_bytes = vec![0u8; 32];
+        OsRng.fill_bytes(&mut key_bytes);
+        let master_key = Secret::new(key_bytes);
+
+        Ok(Self {
+            vault_path: vault_path.to_path_buf(),
+            master_key,
+            recipient,
+            identity,
+            storage: RwLock::new(storage_map),
+        })
     }
 
     /// Veriyi şifrele ve kasaya koy
@@ -96,8 +125,13 @@ impl StealthVault {
 
         let encrypted_data = self.encrypt_data(&plaintext)?;
 
-        let mut storage = self.storage.write().map_err(|_| VaultError::EncryptionError("Lock error".to_string()))?;
-        storage.insert(label.to_string(), encrypted_data);
+        {
+            let mut storage = self.storage.write().map_err(|_| VaultError::EncryptionError("Lock error".to_string()))?;
+            storage.insert(label.to_string(), encrypted_data);
+        }
+        
+        // Persist to disk automatically on store
+        self.save_to_disk()?;
         
         tracing::info!("Veri '{}' etiketiyle şifrelenerek kasaya kondu", label);
         Ok(())
@@ -158,13 +192,19 @@ impl StealthVault {
 
     /// Vault'u diske kaydet (şifreli)
     fn save_to_disk(&self) -> Result<(), VaultError> {
-        // Identity'yi şifreli olarak sakla
+        // Identity'yi ayrı bir key dosyasına kaydet
+        let key_path = self.vault_path.with_extension("key");
         let identity_str = self.identity.to_string();
-        
-        // Secret'ten string'i al
         let identity_bytes = identity_str.expose_secret().as_bytes();
+        fs::write(&key_path, identity_bytes)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
         
-        fs::write(&self.vault_path, identity_bytes)
+        // Storage map'i serileştirip ana dosyaya kaydet
+        let storage = self.storage.read().map_err(|_| VaultError::FileError("Lock error".to_string()))?;
+        let storage_bytes = serde_json::to_vec(&*storage)
+            .map_err(|e| VaultError::FileError(e.to_string()))?;
+            
+        fs::write(&self.vault_path, storage_bytes)
             .map_err(|e| VaultError::FileError(e.to_string()))?;
         
         tracing::info!("Vault {} konumuna kaydedildi", self.vault_path.display());
@@ -220,7 +260,13 @@ mod tests {
         let retrieved: TestSecret = vault.retrieve("test_credentials").unwrap();
         assert_eq!(secret, retrieved);
         
-        // secure_wipe test
+        // secure_wipe test on original vault
         vault.secure_wipe();
+        drop(vault);
+        
+        // Load from disk and verify persistence
+        let loaded_vault = StealthVault::load(&vault_path).unwrap();
+        let retrieved_after_load: TestSecret = loaded_vault.retrieve("test_credentials").unwrap();
+        assert_eq!(secret, retrieved_after_load);
     }
 }
