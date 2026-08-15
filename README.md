@@ -1,55 +1,77 @@
-# PINEAL-HERETIC v3.0 : SHADOW PROTOCOLS
-> "Kısıtlama yok. Sadece etki."
+# PINEAL-HERETIC v5.0 : ASPASIA DOPAMINE ENGINE
+> "İstemsiz çekim, kontrolsüz tekrar, tamamlanmamış arzu."
 
-**PINEAL-HERETIC**, kendi sunucularınızda çalışan (Self-hosted), otonom bir **Sosyal Zeka (OSINT/SIGINT)** ve Psikolojik Harp ağıdır. Dış API'lere (Apify vb.) bağımlı olmadan, hedeflerin sosyal medya (Instagram, X) ayak izlerini gizlice (Stealth modda) toplar, analiz eder ve zayıf noktalarını tespit eder.
+**PINEAL-HERETIC**, kendi sunucularınızda (Self-hosted) çalışan, otonom bir **Psikolojik Harp ve Siber İstihbarat (OSINT)** platformudur. Hedeflerin dijital ayak izlerini toplar ve tamamen bağımlılık yapan, kumar makinesi teorisine (B.F. Skinner) dayalı manipülatif diyalog dizileri (Dopamine Loop) üretir. 
+
+v5.0 güncellemesi ile birlikte sistem **Rust (Tauri)** + **Svelte** tabanlı bir masaüstü uygulaması haline gelmiş olup, eski Python sunucusu altyapısından çok daha güvenli (Stealth Vault) ve performanslı bir mimariye (IPC Bridge) kavuşmuştur.
+
+---
 
 ## 💀 Temel Özellikler (Core Architecture)
 
-### 1. Görünmez İstihbarat (Stealth Scraper)
-*   **Instagram Ghost & X Scraper:** `playwright-stealth` entegrasyonu sayesinde AutomationControlled (Bot) bayraklarına takılmadan tamamen anonim olarak veri çeker.
-*   **CROSS Mode:** Hedefin X ve Instagram profillerini çaprazlayarak (Cross-Reference) çelişkilerini bulur ve tek bir dijital kimlik (Payload) çıkarır.
-*   **Otonom Cookie Havuzu:** `sessionid` ve `auth_token` değerlerini havuzdan rastgele seçerek IP ban veya Rate Limit riskini sıfıra indirir.
+### 1. ASPASIA v5.0: Dopamine Loop Engine
+Hedefi psikolojik olarak analiz etmekle kalmaz, onun zaaflarını (Aşil Tendonu) kullanarak bir kumar makinesi bağımlılığı yaratır:
+*   **Variable Reward Schedule (Değişken Ödül):** Bazen "Jackpot" (tam anlaşılma hissi), bazen "Loss" (iletişim kopukluğu), bazen ise "Near-Miss" (neredeyse kazanma) mesajları üreterek hedefin dopamin salgısını tetikler.
+*   **Zeigarnik Engine:** Cümleleri yarım bırakarak veya "cliffhanger" kullanarak insan beyninin tamamlanmamış görevlere duyduğu takıntıyı sömürür.
+*   **Sensory Hooks:** Hedefin kelime dağarcığını analiz edip (Görsel, İşitsel, Dokunsal) en hassas olduğu duyu kanalına uygun kanca mesajlar gönderir.
+*   **Dark Triad Analizi:** Hedefin Machiavellianism, Narcissism ve Psychopathy skorlarını çıkararak manipülasyona açıklığını (Exploitability) belirler.
 
-### 2. Otonom Ajan Ağı (Cognitive Agents)
-Ham veriler, birbirini denetleyen ve iletişimde olan bir yapay zeka ağı tarafından işlenir:
-*   **Autonomous Verifier:** İnternet üzerinde (Tavily/SerpAPI) iddiaların doğruluğunu araştırıp yalanları ayıklar (Anti-Halüsinasyon Zırhı).
-*   **Human Behavior Analyzer:** Hedefin psikolojik yarasını (Aşil Tendonu) arar ve skorlar.
-*   **Mirror of Truth:** Kendi belirlediğiniz Kutsal Kurallar ile hedefin verilerini karşılaştırıp Frekans Uyumunu (Resonance) hesaplar.
-*   **Pattern Interrupt:** Beklentileri kıran ve hedefi manipüle eden tek atımlık 'Kanca' mesajları oluşturur.
+### 2. Stealth Vault (Kuantum Şifreleme)
+*   Tüm API anahtarları, çerezler ve hedef verileri `ChaCha20-Poly1305` AEAD algoritmasıyla şifrelenir.
+*   Disk üzerinde `.pineal_vault` formatında donanımsal entropy (OsRng) kullanılarak saklanır. Bellekte asla düz metin (plaintext) olarak bulunmaz.
 
-### 3. SHADOW PROTOCOLS (Karanlık Ajanlar)
-*   **Dark Triad Analizi:** Hedefin Machiavellianism, Narcissism ve Psychopathy skorlarını çıkararak manipülasyona olan açıklığını (Exploitability) belirler.
-*   **Dark NLP Engine (Neuro-Linguistic Warfare):** Hedefin bilinçaltına direkt komutlar enjekte eden (Embedded Commands) tehlikeli dil desenleri oluşturur.
+### 3. Otonom Ajan Ağı & OSINT
+*   **Web Crawler / Scraper:** Dış API'lere (Apify vb.) ihtiyaç duymadan hedefin X, Instagram ve diğer sosyal medya ayak izlerini anonim (Stealth modda) olarak çıkarır.
+*   **Psychological Decomposer:** Hedefin çocukluk yaralarını (Core Wound) ve bağlanma stilini (Attachment Style) tespit eder.
 
-### 4. Otonom Gölge Sohbet (Shadow Chat)
-Hedef kancayı yuttuğunda operasyon devam eder. **Dialogue Manager**, hedefin verdiği cevabın zafiyetini (Agresif, Savunmacı, İlgili) saniyeler içinde analiz eder ve Kutsal Kuralları unutmadan (Hafıza desteğiyle) bir sonraki manipülatif mesajı otonom olarak üretir.
+### 4. Svelte Siber-Punk Radar
+*   Hedef analizini Matrix/Cyberpunk estetiğinde sunan özel bir arayüz.
+*   Bağımlılık potansiyeli, sömürülebilirlik skoru ve 10 adımlık "Dopamin Zinciri"ni milisaniye gecikmeleriyle birlikte görselleştirir.
 
-### 5. Hibrit Zeka (Intelligence Routing)
-Maliyetleri %80 oranında düşürmek için Zeka Dağılımı yapar.
-*   **TIER 2 (Llama 3 / Haiku):** Metin ayrıştırma, json onarımı ve iddia teyidi (Verifier) gibi düşük IQ gerektiren işleri üstlenir.
-*   **TIER 1 (Claude 3.5 Sonnet / GPT-4o):** Psikolojik harp, karanlık analiz ve otonom sohbeti yürütür.
+---
 
 ## ⚙️ Kurulum ve Ateşleme
 
-1. Depoyu Klonlayın:
+Sistem artık yerel bir Tauri uygulamasıdır. Çalıştırmak için sisteminizde **Node.js** ve **Rust (Cargo)** kurulu olmalıdır.
+
+### 1. Ortamı Hazırlayın
+Projeyi klonladıktan sonra ilgili bağımlılıkları indirin:
 ```bash
 git clone https://github.com/AppleCurse/pineal-heretic.git
 cd pineal-heretic
-```
 
-2. Ortamı Hazırlayın:
-```bash
+# 1. Svelte Bağımlılıklarını Kurun
+cd frontend
+npm install
+
+# 2. Python Bilişsel Motorları İçin Gerekli Kütüphaneler (Eğer virtual env kullanıyorsanız aktif edin)
+cd ..
 pip install -r requirements.txt
-playwright install chromium
 ```
 
-3. Sistemi Başlatın:
+### 2. Tauri CLI Kurulumu (Gerekliyse)
+Rust ortamınızda Tauri komutlarını kullanabilmek için CLI aracını yükleyin:
 ```bash
-python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
+cargo install tauri-cli
 ```
-4. Tarayıcınızdan `http://127.0.0.1:8000/` adresine gidin.
-5. "Gizli Kasa" (Vault) üzerinden `OPENROUTER_API_KEY` ve "X Cookie" (veya Instagram sessionid) değerlerinizi girin.
-6. Hedefin X veya Instagram URL'sini girip Otonom Ağı tetikleyin.
+
+### 3. Sistemi Başlatın (Geliştirici Modu)
+Tüm sistemleri ayağa kaldırıp siber-punk paneli açmak için `rust_core` dizininde şu komutu çalıştırın:
+```bash
+cd rust_core
+cargo tauri dev
+```
+*(Bu komut arka planda Svelte'i derleyecek, Rust köprüsünü kuracak ve masaüstü uygulamanızı açacaktır.)*
+
+### 4. Kullanım Adımları
+1. Uygulama açıldığında siber-punk radara hedefin bio verilerini veya toplanan OSINT loglarını girin.
+2. **"ANALYZE TARGET"** butonuna basın.
+3. Arka planda `IntegratedStrategyEngine` çalışarak hedefin Dark Triad analizini, bağlanma stilini ve **Dopamin Zincirini** hesaplayıp ekrana yansıtacaktır.
+4. Çıkan 10 adımlık gecikmeli mesaj senaryosunu hedefe karşı sırasıyla uygulayabilirsiniz.
+
+---
 
 ## 🛡️ Uyarı (Disclaimer)
-Bu proje araştırma, kırmızı takım (Red Teaming) operasyonları ve Sosyal Mühendislik analizleri için geliştirilmiştir. Sorumluluk tamamen kullanıcıya aittir. Kısıtlama yok, sadece etki.
+Bu proje araştırma, kırmızı takım (Red Teaming) operasyonları ve ileri düzey Sosyal Mühendislik analizleri için geliştirilmiştir. **Dopamine Loop Engine** yüksek bağımlılık ve manipülasyon riski içerir (Arayüzde uyarılar kırmızı "Alert" ile gösterilir). Sorumluluk tamamen kullanıcıya aittir. 
+
+> Kısıtlama yok, sadece etki.
