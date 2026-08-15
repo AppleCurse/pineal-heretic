@@ -43,6 +43,7 @@ pub fn run() {
             analyze_with_aspasia,
             analyze_target_real,
             consult_aspasia,
+            run_osint_scraper,
         ])
         .setup(move |app| {
             // Telemetri köprüsünü kur

@@ -1,9 +1,18 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
+  import { scrapedUsername, scrapedBio, scrapedPosts } from '../store';
   
   let username = '';
   let bio = '';
   let posts: string[] = [];
+  
+  // Mağaza (store) güncellemelerini dinle
+  $: {
+    if ($scrapedUsername) username = $scrapedUsername;
+    if ($scrapedBio) bio = $scrapedBio;
+    if ($scrapedPosts && $scrapedPosts.length > 0) posts = [...$scrapedPosts];
+  }
+
   let analysis: any = null;
   let loading = false;
   let error = '';

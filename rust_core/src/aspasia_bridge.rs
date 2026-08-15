@@ -223,3 +223,82 @@ YANIT:""#,
         .map(|s| s.to_string())
         .ok_or_else(|| "Yanıt alınamadı".to_string())
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScrapedPost {
+    pub shortcode: String,
+    pub display_url: String,
+    pub caption: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScrapedProfile {
+    pub username: String,
+    pub biography: Option<String>,
+    pub posts: Vec<ScrapedPost>,
+    pub error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn run_osint_scraper(target_url: String) -> Result<ScrapedProfile, String> {
+    // Run the python scraper
+    let python_script = r#"
+import sys
+import os
+import json
+import asyncio
+sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), '..', '..')))
+from agent_core.scraper.instagram_ghost import InstagramGhostScraper, InsufficientEvidenceError
+from playwright.async_api import async_playwright
+
+async def main():
+    username = sys.argv[1].strip('/').split('/')[-1]
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            scraper = InstagramGhostScraper()
+            try:
+                profile = await scraper.scrape_async(username, playwright_page=page)
+                print(profile.model_dump_json())
+            except InsufficientEvidenceError as e:
+                print(json.dumps({"error": str(e)}))
+            finally:
+                await browser.close()
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+
+asyncio.run(main())
+"#;
+
+    // Use the venv python if available, otherwise just python
+    let python_exe = if cfg!(windows) {
+        "..\\venv\\Scripts\\python.exe"
+    } else {
+        "../venv/bin/python"
+    };
+
+    let output = Command::new(python_exe)
+        .arg("-c")
+        .arg(python_script)
+        .arg(&target_url)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Python execution failed (Are you in the venv?): {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Parse the JSON. We might have other prints, so find {}
+    let json_str = if let (Some(start), Some(end)) = (stdout.find('{'), stdout.rfind('}')) {
+        &stdout[start..=end]
+    } else {
+        return Err(format!("Scraper did not return JSON. Stdout: {}, Stderr: {}", stdout, String::from_utf8_lossy(&output.stderr)));
+    };
+
+    let profile: ScrapedProfile = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse scraper output: {}", e))?;
+        
+    Ok(profile)
+}

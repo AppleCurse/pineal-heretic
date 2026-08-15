@@ -7,6 +7,7 @@
   import RadarPanel from './components/RadarPanel.svelte';
   import VaultPanel from './components/VaultPanel.svelte';
   import RealAspasiaPanel from './components/RealAspasiaPanel.svelte';
+  import { scrapedUsername, scrapedBio, scrapedPosts, isScraping } from './store';
 
   let telemetryData: any = null;
   let targetUrl = "";
@@ -33,10 +34,30 @@
   async function triggerAnalysis() {
     if (!targetUrl) return;
     try {
-      await invoke('start_analysis', { targetUrl });
-      telemetryData = { type: 'radar_alert', message: `ANALİZ BAŞLADI: ${targetUrl}` };
+      isScraping.set(true);
+      telemetryData = { type: 'radar_alert', message: `HAYALET TARAYICI BAŞLATILDI: ${targetUrl}` };
+      
+      const profile: any = await invoke('run_osint_scraper', { targetUrl });
+      
+      if (profile.error) {
+        telemetryData = { type: 'radar_alert', message: `HATA: ${profile.error}` };
+      } else {
+        telemetryData = { type: 'radar_alert', message: `VERİ ÇEKİLDİ: ${profile.username}` };
+        
+        // Mağazayı güncelle
+        scrapedUsername.set(profile.username);
+        scrapedBio.set(profile.biography || "");
+        
+        const postTexts = profile.posts
+          .filter((p: any) => p.caption)
+          .map((p: any) => p.caption);
+          
+        scrapedPosts.set(postTexts);
+      }
     } catch (e) {
-      telemetryData = { type: 'radar_alert', message: `HATA: ${e}` };
+      telemetryData = { type: 'radar_alert', message: `ÇÖKME: ${e}` };
+    } finally {
+      isScraping.set(false);
     }
   }
 </script>
