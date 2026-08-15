@@ -7,8 +7,11 @@ use age::secrecy::{ExposeSecret, Secret};
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 use thiserror::Error;
 
 /// Vault hataları
@@ -40,6 +43,7 @@ pub struct StealthVault {
     master_key: Secret<Vec<u8>>,
     recipient: age::x25519::Recipient,
     identity: age::x25519::Identity,
+    storage: RwLock<HashMap<String, EncryptedPayload>>,
 }
 
 impl StealthVault {
@@ -65,6 +69,7 @@ impl StealthVault {
             master_key,
             recipient,
             identity,
+            storage: RwLock::new(HashMap::new()),
         };
         
         // Vault dosyasını oluştur
@@ -86,36 +91,43 @@ impl StealthVault {
 
     /// Veriyi şifrele ve kasaya koy
     pub fn store<T: Serialize>(&self, label: &str, data: &T) -> Result<(), VaultError> {
-        // Serialize
         let plaintext = serde_json::to_vec(data)
             .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
 
-        // age ile şifrele
-        let _encrypted_data = self.encrypt_data(&plaintext)?;
+        let encrypted_data = self.encrypt_data(&plaintext)?;
 
-        // Kasaya kaydet (label ile)
-        // Gerçek implementasyonda bu bir HashMap veya DB olacak
-        tracing::info!("Veri '{}' etiketiyle şifrelenerek kasaya kondu", label);
+        let mut storage = self.storage.write().map_err(|_| VaultError::EncryptionError("Lock error".to_string()))?;
+        storage.insert(label.to_string(), encrypted_data);
         
+        tracing::info!("Veri '{}' etiketiyle şifrelenerek kasaya kondu", label);
         Ok(())
     }
 
     /// Veriyi kasadan al ve şifresini çöz
     pub fn retrieve<T: for<'de> Deserialize<'de>>(&self, label: &str) -> Result<T, VaultError> {
-        // TODO: Label'a göre şifreli veriyi bul
-        // Demo amaçlı hata döndürüyoruz
-        Err(VaultError::DecryptionError(format!("'{}' etiketli veri bulunamadı", label)))
+        let storage = self.storage.read().map_err(|_| VaultError::DecryptionError("Lock error".to_string()))?;
+        let payload = storage.get(label)
+            .ok_or_else(|| VaultError::DecryptionError(format!("'{}' etiketli veri bulunamadı", label)))?;
+            
+        let decrypted = self.decrypt_data(payload)?;
+        
+        serde_json::from_slice(&decrypted)
+            .map_err(|e| VaultError::DecryptionError(e.to_string()))
     }
 
-    /// age ile veri şifreleme - basitleştirilmiş demo versiyonu
+    /// age ile veri şifreleme
     fn encrypt_data(&self, plaintext: &[u8]) -> Result<EncryptedPayload, VaultError> {
-        // Demo amaçlı basit şifreleme (gerçek implementasyonda age tam kullanılacak)
-        // age kütüphanesinin API'si karmaşık olduğu için şimdilik XOR şifreleme yapıyoruz
-        let key = self.master_key.expose_secret();
-        let encrypted: Vec<u8> = plaintext.iter()
-            .zip(key.iter().cycle())
-            .map(|(&byte, &key_byte)| byte ^ key_byte)
-            .collect();
+        let encryptor = age::Encryptor::with_recipients(vec![Box::new(self.recipient.clone())])
+            .expect("Encryptor oluşturulamadı");
+            
+        let mut encrypted = vec![];
+        let mut writer = encryptor.wrap_output(&mut encrypted)
+            .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
+            
+        writer.write_all(plaintext)
+            .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
+        writer.finish()
+            .map_err(|e| VaultError::EncryptionError(e.to_string()))?;
 
         let mut nonce = [0u8; 32];
         OsRng.fill_bytes(&mut nonce);
@@ -126,14 +138,20 @@ impl StealthVault {
         })
     }
 
-    /// age ile veri şifre çözme - basitleştirilmiş demo versiyonu
+    /// age ile veri şifre çözme
     fn decrypt_data(&self, payload: &EncryptedPayload) -> Result<Vec<u8>, VaultError> {
-        // Demo amaçlı basit şifre çözme (XOR)
-        let key = self.master_key.expose_secret();
-        let decrypted: Vec<u8> = payload.ciphertext.iter()
-            .zip(key.iter().cycle())
-            .map(|(&byte, &key_byte)| byte ^ key_byte)
-            .collect();
+        let decryptor = match age::Decryptor::new(payload.ciphertext.as_slice())
+            .map_err(|e| VaultError::DecryptionError(e.to_string()))? {
+            age::Decryptor::Passphrase(_) => return Err(VaultError::DecryptionError("Passphrase not supported".to_string())),
+            age::Decryptor::Recipients(d) => d,
+        };
+
+        let mut reader = decryptor.decrypt(std::iter::once(&self.identity as &dyn age::Identity))
+            .map_err(|e| VaultError::DecryptionError(e.to_string()))?;
+            
+        let mut decrypted = vec![];
+        reader.read_to_end(&mut decrypted)
+            .map_err(|e| VaultError::DecryptionError(e.to_string()))?;
 
         Ok(decrypted)
     }
@@ -197,8 +215,10 @@ mod tests {
             session_token: "sess-abcde".to_string(),
         };
 
-        // Not: retrieve şu anda unimplemented, bu yüzden compile testi yapıyoruz
         vault.store("test_credentials", &secret).unwrap();
+        
+        let retrieved: TestSecret = vault.retrieve("test_credentials").unwrap();
+        assert_eq!(secret, retrieved);
         
         // secure_wipe test
         vault.secure_wipe();
