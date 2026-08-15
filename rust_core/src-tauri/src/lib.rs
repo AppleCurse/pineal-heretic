@@ -22,8 +22,9 @@ async fn query_aspasia(state: tauri::State<'_, CoreState>) -> Result<String, Str
 
 #[tauri::command]
 async fn set_vault_credentials(key: String, value: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let _vault = state.vault.lock().await;
-    Ok(format!("{} başarıyla kasaya eklendi.", key))
+    let vault = state.vault.lock().await;
+    vault.store(&key, &value).map_err(|e| e.to_string())?;
+    Ok(format!("{} başarıyla kasaya şifrelenerek eklendi.", key))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

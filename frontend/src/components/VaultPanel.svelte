@@ -48,41 +48,54 @@
 
 <style>
   .panel {
-    border: 1px solid rgba(255, 165, 0, 0.3);
-    background: rgba(20, 15, 10, 0.8);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     padding: 1rem;
-    color: #fa0;
-    font-family: 'Courier New', Courier, monospace;
-    box-shadow: inset 0 0 10px rgba(255, 165, 0, 0.1);
+    color: #0f0;
+    font-family: 'Share Tech Mono', monospace;
   }
   
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 165, 0, 0.3);
+    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
   
   h2 {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     letter-spacing: 2px;
+    text-shadow: 0 0 5px #0f0;
+  }
+  
+  .lock-icon {
+    color: #0f0;
+  }
+  
+  .panel-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
   }
   
   .status-box {
     padding: 0.5rem;
-    background: rgba(0,0,0,0.5);
-    border: 1px dashed #fa0;
+    background: rgba(0, 20, 0, 0.6);
+    border: 1px dashed #0f0;
     margin-bottom: 1rem;
     text-align: center;
     font-weight: bold;
+    font-size: 0.9rem;
   }
   
   .status-box.alert {
     border-color: #f00;
     color: #f00;
+    background: rgba(20, 0, 0, 0.6);
     animation: flash 1s infinite;
   }
   
@@ -93,35 +106,47 @@
   }
   
   input {
-    background: rgba(0,0,0,0.8);
-    border: 1px solid #fa0;
-    color: #fa0;
+    background: rgba(0, 20, 0, 0.5);
+    border: 1px solid #0f0;
+    color: #0f0;
     padding: 0.5rem;
     font-family: inherit;
+    outline: none;
+  }
+  
+  input::placeholder {
+    color: rgba(0, 255, 0, 0.4);
   }
   
   button {
-    background: #fa0;
-    color: #000;
-    border: none;
+    background: transparent;
+    color: #0f0;
+    border: 1px solid #0f0;
     padding: 0.5rem;
     font-weight: bold;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    text-transform: uppercase;
   }
   
   button:hover {
-    background: #ffb732;
+    background: #0f0;
+    color: #000;
+    box-shadow: 0 0 10px #0f0;
   }
   
   .vault-log {
     margin-top: 1rem;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     opacity: 0.8;
+    background: rgba(0,0,0,0.5);
+    padding: 0.5rem;
+    border-left: 2px solid #0f0;
+    word-wrap: break-word;
   }
   
   @keyframes flash {
-    0%, 100% { background: rgba(255,0,0,0.1); }
-    50% { background: rgba(255,0,0,0.3); }
+    0%, 100% { box-shadow: inset 0 0 10px rgba(255,0,0,0.2); }
+    50% { box-shadow: inset 0 0 20px rgba(255,0,0,0.5); }
   }
 </style>

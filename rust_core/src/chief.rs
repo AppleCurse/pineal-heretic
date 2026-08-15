@@ -126,6 +126,11 @@ impl ChiefEngine {
                 })
             },
 
+            AgentEvent::TelemetryLog { agent_name, message } => {
+                println!("[CHIEF TELEMETRY] {}: {}", agent_name, message);
+                None
+            },
+
             AgentEvent::TaskCompleted { task_id, agent_name, duration_ms, .. } => {
                 // Task context temizle
                 self.task_summaries.remove(task_id);

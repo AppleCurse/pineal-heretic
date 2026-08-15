@@ -64,34 +64,33 @@
 
 <style>
   .panel {
-    border: 1px solid rgba(255, 0, 255, 0.3);
-    background: rgba(15, 10, 20, 0.8);
-    padding: 1rem;
-    color: #f0f;
-    font-family: 'Courier New', Courier, monospace;
-    box-shadow: inset 0 0 10px rgba(255, 0, 255, 0.1);
     display: flex;
     flex-direction: column;
     height: 100%;
+    padding: 1rem;
+    color: #0f0;
+    font-family: 'Share Tech Mono', monospace;
   }
   
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 0, 255, 0.3);
+    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
   
   h2 {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     letter-spacing: 2px;
+    text-shadow: 0 0 5px #0f0;
   }
   
   .typing-indicator {
     animation: blink 1s infinite;
+    color: #0f0;
   }
   
   .panel-content {
@@ -105,8 +104,8 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.5rem;
-    background: rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,0,255,0.2);
+    background: rgba(0, 20, 0, 0.5);
+    border: 1px solid rgba(0, 255, 0, 0.2);
     margin-bottom: 1rem;
     display: flex;
     flex-direction: column;
@@ -115,15 +114,15 @@
   
   .message {
     padding: 0.5rem;
-    background: rgba(255,0,255,0.1);
-    border-left: 2px solid #f0f;
+    background: rgba(0, 255, 0, 0.1);
+    border-left: 2px solid #0f0;
   }
   
   .message.user {
-    background: rgba(0,255,255,0.1);
+    background: rgba(0, 100, 0, 0.3);
     border-left: none;
-    border-right: 2px solid #0ff;
-    color: #0ff;
+    border-right: 2px solid #0a0;
+    color: #0f0;
     align-self: flex-end;
     text-align: right;
   }
@@ -132,36 +131,39 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: rgba(0,0,0,0.8);
-    border: 1px solid #f0f;
+    background: rgba(0, 20, 0, 0.8);
+    border: 1px solid #0f0;
     padding: 0.5rem;
   }
   
   .prompt {
     font-weight: bold;
+    color: #0f0;
   }
   
   input {
     flex: 1;
     background: transparent;
     border: none;
-    color: #f0f;
+    color: #0f0;
     font-family: inherit;
     outline: none;
   }
   
   button {
-    background: #f0f;
-    color: #000;
-    border: none;
+    background: transparent;
+    color: #0f0;
+    border: 1px solid #0f0;
     padding: 0.5rem 1rem;
     font-weight: bold;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s;
   }
   
   button:hover {
-    background: #ff55ff;
+    background: #0f0;
+    color: #000;
+    box-shadow: 0 0 10px #0f0;
   }
   
   @keyframes blink {
