@@ -14,7 +14,7 @@ async def test_llm_gateway_json_repair():
     # Call 2 (repair): returns fixed JSON
     
     call_count = 0
-    async def mock_query(prompt, temperature=0.7, model="anthropic/claude-3.5-sonnet"):
+    async def mock_query(prompt, *args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count == 1:

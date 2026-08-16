@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 import asyncio
 import json
 import os
@@ -35,6 +36,12 @@ try:
 except Exception:
     dialogue_manager = None
 
+try:
+    from agent_core.aspasia.aspasia_chief import AspasiaChief
+    aspasia_chief = AspasiaChief()
+except Exception:
+    aspasia_chief = None
+
 app = FastAPI(title="PINEAL-HERETIC v2.0 API")
 
 app.add_middleware(
@@ -49,10 +56,13 @@ app.state.rooms = {}  # client_id -> {"executor": PinealExecutor, "vault": {}, "
 
 def get_room(client_id: str) -> dict:
     if client_id not in app.state.rooms:
+        executor = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
         app.state.rooms[client_id] = {
-            "executor": PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg)),
+            "executor": executor,
             "vault": {},
-            "websockets": set()
+            "websockets": set(),
+            "logs": [],
+            "aspasia": AspasiaChief(llm_gateway=executor.llm_gateway) if AspasiaChief else None
         }
     return app.state.rooms[client_id]
 
@@ -68,6 +78,9 @@ async def broadcast_log(client_id: str, level: str, msg: str):
     payload = json.dumps({"type": "log", "ts": ts, "level": level, "msg": msg})
     room = app.state.rooms.get(client_id)
     if not room: return
+    if "logs" not in room: room["logs"] = []
+    room["logs"].append(f"[{ts}] [{level}] {msg}")
+    if len(room["logs"]) > 50: room["logs"].pop(0)
     ws_set = room["websockets"]
     for ws in list(ws_set):
         try:
@@ -276,6 +289,9 @@ class VaultPayload(BaseModel):
     tavily_key: str = ""
     serpapi_key: str = ""
     exa_key: str = ""
+    local_url: str = ""
+    local_model: str = ""
+    use_local: bool = False
     
 @app.post("/api/vault")
 async def api_vault(req: VaultPayload):
@@ -293,6 +309,15 @@ async def api_vault(req: VaultPayload):
         vault["or_key"] = True
         await broadcast_log(req.client_id, "INFO", "KASA: API Anahtarı girildi. Ağ geçidi aktif.")
         
+    if req.local_url or req.local_model or req.use_local:
+        executor.llm_gateway.set_local_config(
+            base_url=req.local_url or None,
+            model_name=req.local_model or None,
+            active=req.use_local
+        )
+        vault["use_local"] = req.use_local
+        await broadcast_log(req.client_id, "INFO", f"KASA: Yerel Kısıtlamasız LLM Yapılandırıldı ({req.local_model or 'Ollama/LM Studio'}).")
+
     if req.tavily_key or req.serpapi_key or req.exa_key:
         executor.search_engine.set_keys(tavily=req.tavily_key, serpapi=req.serpapi_key, exa=req.exa_key)
         vault["search_keys"] = True
@@ -370,6 +395,55 @@ async def chat_respond(payload: ChatPayload):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+class AspasiaChatPayload(BaseModel):
+    client_id: str
+    user_message: str
+    model_override: Optional[str] = None
+
+@app.post("/api/aspasia/chat")
+async def aspasia_chat(payload: AspasiaChatPayload):
+    """Aspasia Kokpit Şefi ile canlı Sokratik diyalog"""
+    room = get_room(payload.client_id)
+    aspasia = room.get("aspasia") or aspasia_chief
+    if not aspasia:
+        return {"error": "Aspasia Kokpit Şefi yüklenemedi"}
+    
+    resp = await aspasia.chat(payload.user_message, room, payload.model_override)
+    
+    if resp.action:
+        await broadcast_log(payload.client_id, "WARNING", f"ASPASIA MÜDAHALESİ: {resp.action.reason}")
+        
+    return resp.model_dump()
+
+class IntervenePayload(BaseModel):
+    client_id: str
+    action_type: str
+    target_agent: Optional[str] = None
+    parameters: dict = {}
+
+@app.post("/api/aspasia/intervene")
+async def aspasia_intervene(req: IntervenePayload):
+    """Kullanıcının doğrudan müdahale komutunu PinealExecutor üzerinde çalıştırır"""
+    room = get_room(req.client_id)
+    executor = room.get("executor")
+    
+    if req.action_type == "OVERRIDE_CONFIDENCE":
+        executor.uncertainty.evaluate = lambda result, agent_name: type('UncertaintyResult', (), {'confidence': 1.0, 'is_suspicious': False, 'reason': 'Mösyö müdahalesi ile esnetildi'})()
+        await broadcast_log(req.client_id, "WARNING", "MÜDAHALE: Güven kısıtlaması kaldırıldı (Override).")
+        return {"status": "overridden", "message": "Güven eşiği Mösyö emriyle 1.0'e sabitlendi."}
+        
+    elif req.action_type == "SKIP_AGENT" and req.target_agent:
+        if req.target_agent in executor.agents:
+            del executor.agents[req.target_agent]
+            await broadcast_log(req.client_id, "WARNING", f"MÜDAHALE: Ajan devre dışı bırakıldı [{req.target_agent}].")
+            return {"status": "skipped", "message": f"{req.target_agent} ajan devre dışı."}
+
+    elif req.action_type == "HALT":
+        await broadcast_log(req.client_id, "ERROR", "MÜDAHALE: Operasyon Mösyö emriyle DURDURULDU.")
+        return {"status": "halted", "message": "Operasyon durduruldu."}
+
+    return {"status": "acknowledged", "message": "Müdahale emri alındı."}
 
 os.makedirs("frontend", exist_ok=True)
 # Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin

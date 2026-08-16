@@ -14,9 +14,16 @@ class LLMGateway:
     TIER_1_MODEL = "anthropic/claude-3.5-sonnet" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
     TIER_2_MODEL = "meta-llama/llama-3-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
 
+    LOCAL_DEFAULT_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/v1")
+    LOCAL_DEFAULT_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen2.5-coder:latest")
+
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")
+        self.local_base_url = self.LOCAL_DEFAULT_URL
+        self.local_model = self.LOCAL_DEFAULT_MODEL
+        self.use_local = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
         self.client = None
+        self.local_client = None
         self.failure_count = 0
         self.circuit_open = False
         self._rebuild()
@@ -27,22 +34,48 @@ class LLMGateway:
         self.circuit_open = False
         self._rebuild()
 
+    def set_local_config(self, base_url: str = None, model_name: str = None, active: bool = True):
+        if base_url:
+            self.local_base_url = base_url
+        if model_name:
+            self.local_model = model_name
+        self.use_local = active
+        self._rebuild()
+
     def _rebuild(self):
         if self.api_key:
             self.client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.api_key)
+        # Local client (Ollama/LM Studio/vLLM)
+        try:
+            self.local_client = AsyncOpenAI(base_url=self.local_base_url, api_key="ollama")
+        except Exception:
+            self.local_client = None
 
-    async def query(self, prompt: str, temperature: float = 0.7, tier: int = 1, model: str = None) -> str:
+    async def query(self, prompt: str, temperature: float = 0.7, tier: int = 1, model: str = None, system_prompt: str = None) -> str:
         if self.circuit_open:
             raise RuntimeError("Circuit breaker ACIK - LLM servisi durduruldu")
-        if not self.client:
-            raise RuntimeError("LLM anahtari yok. Vault veya .env ile OPENROUTER_API_KEY enjekte et.")
-            
-        selected_model = model or (self.TIER_1_MODEL if tier == 1 else self.TIER_2_MODEL)
         
+        # Eğer local model seçildiyse veya global use_local aktifse
+        is_local_request = (model and ("local" in model.lower() or "ollama" in model.lower() or "127.0.0.1" in model.lower())) or self.use_local
+        
+        if is_local_request:
+            target_client = self.local_client or AsyncOpenAI(base_url=self.local_base_url, api_key="ollama")
+            selected_model = self.local_model if (not model or model == "local") else model
+        else:
+            if not self.client:
+                raise RuntimeError("LLM anahtari yok. Vault veya .env ile OPENROUTER_API_KEY enjekte et veya Local LLM seç.")
+            target_client = self.client
+            selected_model = model or (self.TIER_1_MODEL if tier == 1 else self.TIER_2_MODEL)
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         try:
-            r = await self.client.chat.completions.create(
+            r = await target_client.chat.completions.create(
                 model=selected_model, temperature=temperature,
-                messages=[{"role": "user", "content": prompt}]
+                messages=messages
             )
             self.failure_count = 0
             return r.choices[0].message.content

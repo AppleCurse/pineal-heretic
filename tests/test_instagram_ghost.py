@@ -16,10 +16,8 @@ def test_private_account_should_not_hallucinate_posts():
     """Gizli hesapta post uydurma"""
     scraper = InstagramGhostScraper()
     html_private = '{"is_private":true,"edge_followed_by":{"count":123}} <meta property="og:description" content="Gizli hesap">'
-    profile = scraper._parse_real_profile({}, html_private, "gizli_kullanici")
-    assert profile.is_private is True
-    assert len(profile.posts) == 0  # Uydurma yok
-    assert profile.follower_count == 123
+    with pytest.raises(InsufficientEvidenceError):
+        scraper._parse_real_profile({}, html_private, "gizli_kullanici")
 
 def test_empty_html_should_halt_not_hallucinate():
     """Boş HTML gelirse halt etmeli, uydurma profil üretmemeli"""
