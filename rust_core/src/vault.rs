@@ -4,7 +4,7 @@
 //! age + argon2 ile diskte şifreli, RAM'de sadece ihtiyaç anında açık.
 
 use age::secrecy::{ExposeSecret, Secret};
-use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+use argon2::{password_hash::SaltString, Argon2, PasswordHasher, PasswordVerifier};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -187,7 +187,8 @@ impl StealthVault {
 
         let mut encrypted = Vec::new();
         {
-            let mut writer = Encryptor::with_recipients(std::iter::once(&self.recipient as _))
+            let recipients: Vec<Box<dyn age::Recipient + Send>> = vec![Box::new(self.recipient.clone())];
+            let mut writer = Encryptor::with_recipients(recipients)
                 .expect("Recipient oluşturulamadı")
                 .wrap_output(&mut encrypted)
                 .expect("Output wrap edilemedi");
@@ -209,9 +210,13 @@ impl StealthVault {
 
         let mut decrypted = Vec::new();
         {
-            let mut reader = decryptor
-                .decrypt(std::iter::once(&self.identity as &dyn age::Identity))
-                .map_err(|e| VaultError::DecryptionError(format!("age decrypt hatası: {}", e)))?;
+            let identities: Vec<Box<dyn age::Identity>> = vec![Box::new(self.identity.clone())];
+            let reader_result = decryptor.decrypt(&identities);
+            
+            let mut reader = match reader_result {
+                Ok(r) => r,
+                Err(e) => return Err(VaultError::DecryptionError(format!("age decrypt hatası: {}", e))),
+            };
 
             reader.read_to_end(&mut decrypted)
                 .map_err(|e| VaultError::DecryptionError(format!("age read hatası: {}", e)))?;
