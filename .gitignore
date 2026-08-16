@@ -1,20 +1,29 @@
 ```
-# Rust build artifacts
+# Rust-specific ignores
 target/
+Cargo.lock
 **/*.rs.bk
+**/*.tmp
 
-# Cargo lock file (uncomment if you want to commit it)
-# Cargo.lock
+# Dependencies
+vendor/
 
-# Unit test artifacts
-**/test_*.rs
-**/*_test.rs
+# Logs and temp files
+*.log
+*.tmp
 
-# Debug and release builds
-debug/
-release/
+# Environment
+.env
+.env.local
+.env.*
 
-```node_modules/
-venv/
-dist/
-target/
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
