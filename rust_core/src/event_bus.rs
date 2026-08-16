@@ -65,6 +65,7 @@ pub enum AgentEvent {
 pub enum Severity {
     Info,
     Warning,
+    High,
     Critical,
 }
 

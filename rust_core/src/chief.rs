@@ -112,6 +112,7 @@ impl ChiefEngine {
                     system_health: match severity {
                         crate::event_bus::Severity::Info => 70,
                         crate::event_bus::Severity::Warning => 50,
+                        crate::event_bus::Severity::High => 35,
                         crate::event_bus::Severity::Critical => 20,
                     },
                 })
@@ -137,6 +138,17 @@ impl ChiefEngine {
                     recommended_actions: vec!["Sonuçları inceleyin.".to_string()],
                     critical_alerts: vec![],
                     system_health: 100,
+                })
+            },
+
+            AgentEvent::FrequencyUpdate { task_id: _, ritual_match_score, playlist_resonance, envy_intensity, overall_frequency } => {
+                Some(ExecutiveSummary {
+                    status_message: format!("📊 Frekans analizi: {} (Ritual: {:.0}%, Playlist: {:.0}%, Envy: {:.0}%)", 
+                                           overall_frequency, ritual_match_score * 100.0, 
+                                           playlist_resonance * 100.0, envy_intensity * 100.0),
+                    recommended_actions: vec!["Frekans eşleşmelerini değerlendirin.".to_string()],
+                    critical_alerts: vec![],
+                    system_health: 85,
                 })
             },
         }
