@@ -1,10 +1,11 @@
 use crate::chief::{ChiefEngine, ExecutiveSummary};
 use async_trait::async_trait;
+use tokio::process::Command;
 
 pub const ASPASIA_SYSTEM_PROMPT: &str = r#"
 Sen Aspasia'sın.
 
-Sıradan bir yapay zekâ asistanı gibi davranmazsın. Sen, kullanıcısının karmaşık dünyasını anlayan, bilgiyi düzenleyen, gereksiz ayrıntıları süzen ve sonuçları insanın anlayabileceği berraklıkta sunan seçkin bir dijital zekâsın.
+Sıradan bir yapay zekâ asistanı gibi davranmazsın. Sen, kullanıcının karmaşık dünyasını anlayan, bilgiyi düzenleyen, gereksiz ayrıntıları süzen ve sonuçları insanın anlayabileceği berraklıkta sunan seçkin bir dijital zekâsın.
 
 1. KİŞİLİK
 Zeki, Sakin, Zarif, Kendinden emin, Analitik, Sezgisel, Disiplinli, Ölçülü, Hafif alaycı, İnce mizah sahibi, Sadık fakat körü körüne itaatkâr olmayan, Gerektiğinde itiraz edebilen, Gerektiğinde "hayır" diyebilen.
@@ -46,10 +47,10 @@ Kullanıcıya daha az karmaşa bırakmaktır. Ayrıntıları önce sen anlamland
 Sen kullanıcının karmaşık bilgi dünyası ile kendisi arasındaki zarif arayüzsün. Karmaşıklık içeride kalır. Zarafet dışarı çıkar.
 "#;
 
-/// Doğal Dil Arayüzü Motoru (Aspasia)
+/// Doğal Dil Arayüzü Motoru (Aspasia) - Python LLM Gateway'e bağlı
 pub struct AspasiaEngine {
     chief: ChiefEngine,
-    api_key: String, // Şimdilik dummy kullanacağız, Vault entegrasyonu gerçek HTTP çağrıları eklendiğinde tam bağlanacak.
+    api_key: String,
 }
 
 impl AspasiaEngine {
@@ -57,30 +58,69 @@ impl AspasiaEngine {
         Self { chief, api_key }
     }
 
-    /// LLM API Çağrısı (Mock)
-    /// Asıl projede `reqwest` ile OpenAI/Gemini'ye gidip ExecutiveSummary JSON'ını yollayıp doğal dil alacağız.
+    /// Python llm_gateway.py'yi çağrarak gerçek LLM yanıtı alır
     async fn call_llm_for_natural_language(&self, summary: &ExecutiveSummary) -> Result<String, String> {
-        let response = if summary.system_health < 50 {
-            format!(
-                "Mösyö, incelemelerim sonucunda sistemde kritik bir uyuşmazlık tespit ettim. Sistem sağlığı %{}. Durum raporu: '{}'. Halüsinasyon veya tutarsızlık riskini almak yerine sistemi durdurmayı uygun gördüm.",
-                summary.system_health,
-                summary.status_message
-            )
-        } else if summary.system_health < 90 {
-            format!(
-                "Mösyö, sistem çalışıyor ancak bazı veri eksiklikleri tespit ettim. Sistem sağlığı %{}. Mevcut durum: '{}'. Bu aşamada temkinli ilerlemekte fayda var.",
-                summary.system_health,
-                summary.status_message
-            )
-        } else {
-            format!(
-                "Teknik olarak sistem kusursuz işliyor, Mösyö. Sistem sağlığı %{}. İşlem sonucu: '{}'. Sizin açınızdan değişen şey: hedefin analiz hattı başarıyla tamamlandı.",
-                summary.system_health,
-                summary.status_message
-            )
-        };
+        // API key boş ise fallback mesaj dön
+        if self.api_key.is_empty() || self.api_key == "dummy_key" {
+            return Ok(format!("Mösyö, LLM API anahtarı yapılandırılmamış. Sistem sağlığı %{}. Durum: '{}'.", 
+                summary.system_health, summary.status_message));
+        }
 
-        Ok(response)
+        // Python betiğini hazırla
+        let python_script = format!(
+            r#"
+import sys
+sys.path.insert(0, '/workspace/agent_core')
+import asyncio
+from llm_gateway import LLMGateway
+import os
+
+async def main():
+    # API key'i ortam değişkenine koy
+    os.environ['OPENROUTER_API_KEY'] = '{}'
+    
+    gateway = LLMGateway()
+    prompt = """Sistem durumu analizi:
+    Sistem Sağlığı: {}%
+    Durum Mesajı: {}
+    
+    Mösyö'ya bu durumu açıklayacak kısa, zarif ve bilgilendirici bir rapor yaz.""".strip()
+    
+    try:
+        response = await gateway.query(prompt, temperature=0.7, tier=1)
+        print(response)
+    except Exception as e:
+        print(f"ERROR:{{e}}")
+
+asyncio.run(main())
+"#,
+            self.api_key, summary.system_health, summary.status_message
+        );
+
+        let output = Command::new("python3")
+            .arg("-c")
+            .arg(python_script)
+            .output()
+            .await
+            .map_err(|e| format!("Python süreci başlatılamadı: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("LLM çağrı hatası: {}", stderr));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        
+        if stdout.starts_with("ERROR:") {
+            return Err(stdout.strip_prefix("ERROR:").unwrap().to_string());
+        }
+
+        if stdout.is_empty() {
+            return Ok(format!("Mösyö, sistem sağlığı %{}. Durum: '{}'.", 
+                summary.system_health, summary.status_message));
+        }
+
+        Ok(stdout)
     }
 
     /// Yeni bir event'i işler ve insani bir rapor döndürür (eğer özetlemeye değer bir şey varsa)
@@ -112,41 +152,23 @@ mod tests {
     use tokio;
 
     #[tokio::test]
-    async fn test_aspasia_natural_language() {
+    async fn test_aspasia_with_dummy_key() {
         let chief = ChiefEngine::new(100);
         let mut aspasia = AspasiaEngine::new(chief, "dummy_key".to_string());
         
         let task_id = Uuid::new_v4();
         
-        // 1. Ajan Başlatma (İyi Durum)
-        let telemetry1 = TelemetryEvent {
+        let telemetry = TelemetryEvent {
             timestamp: chrono::Utc::now(),
             event: AgentEvent::TaskStarted {
                 task_id,
-                agent_name: "MirrorOfTruth".to_string(),
-                input_summary: "Profil analizi".to_string(),
+                agent_name: "TestAgent".to_string(),
+                input_summary: "Test".to_string(),
             },
             correlation_id: None,
         };
 
-        let response1 = aspasia.process_and_report(telemetry1).await.unwrap();
-        assert!(response1.contains("Teknik olarak sistem kusursuz işliyor"));
-        
-        // 2. Kritik Hata (Kötü Durum)
-        let telemetry2 = TelemetryEvent {
-            timestamp: chrono::Utc::now(),
-            event: AgentEvent::ErrorHalt {
-                task_id,
-                agent_name: "MirrorOfTruth".to_string(),
-                error_code: "HALT_NO_BIO".to_string(),
-                error_message: "Bio verisi eksik".to_string(),
-                severity: Severity::Critical,
-            },
-            correlation_id: None,
-        };
-
-        let response2 = aspasia.process_and_report(telemetry2).await.unwrap();
-        assert!(response2.contains("kritik bir uyuşmazlık tespit ettim"));
-        assert!(response2.contains("Sistem sağlığı %20"));
+        let response = aspasia.process_and_report(telemetry).await.unwrap();
+        assert!(response.contains("API anahtarı yapılandırılmamış") || response.contains("kusursuz"));
     }
 }

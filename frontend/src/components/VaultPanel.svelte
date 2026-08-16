@@ -1,25 +1,24 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   
+  export let telemetryData: any = {};
+  
+  let keyInput = "";
   let valInput = "";
-  let vaultStatus = "API ANAHTARI BEKLENİYOR";
+  let vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
   let vaultLog = "";
-
-  async function saveCredentials() {
-    if (!valInput) return;
+  
+  async function sealCredentials() {
     try {
-      vaultStatus = "KAYDEDİLİYOR...";
-      // Arka planda otomatik şifre ile kasayı aç
-      await invoke('unlock_vault', { password: "pineal_default_admin" });
-      
-      // API Anahtarını kaydet
-      const res: string = await invoke('set_vault_credentials', { key: "OPENROUTER_API_KEY", value: valInput });
-      vaultLog = "API Anahtarı başarıyla sisteme gömüldü!";
-      vaultStatus = "SİSTEM AKTİF";
+      vaultStatus = "MÜHÜRLENİYOR...";
+      const res: string = await invoke('set_vault_credentials', { key: keyInput, value: valInput });
+      vaultLog = res;
+      vaultStatus = "GÜVENLİ (MÜHÜRLÜ)";
+      keyInput = "";
       valInput = "";
     } catch(err) {
       vaultLog = `HATA: ${err}`;
-      vaultStatus = "BAĞLANTI HATASI";
+      vaultStatus = "İHLAL RİSKİ";
     }
   }
 </script>
@@ -27,7 +26,7 @@
 <div class="panel vault-panel">
   <div class="panel-header">
     <h2>03 GİZLİ KASA</h2>
-    <div class="lock-icon">🔓</div>
+    <div class="lock-icon">🔒</div>
   </div>
   
   <div class="panel-content">
@@ -36,8 +35,9 @@
     </div>
     
     <div class="form-group">
-      <input type="password" bind:value={valInput} placeholder="OpenRouter API Key Girin" />
-      <button on:click={saveCredentials}>SİSTEME KAYDET</button>
+      <input type="text" bind:value={keyInput} placeholder="Anahtar (Örn: OPENAI_API_KEY)" />
+      <input type="password" bind:value={valInput} placeholder="Değer (Gizli)" />
+      <button on:click={sealCredentials}>KASAYA MÜHÜRLE</button>
     </div>
     
     {#if vaultLog}
@@ -48,54 +48,41 @@
 
 <style>
   .panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    background: rgba(20, 15, 10, 0.8);
     padding: 1rem;
-    color: #0f0;
-    font-family: 'Share Tech Mono', monospace;
+    color: #fa0;
+    font-family: 'Courier New', Courier, monospace;
+    box-shadow: inset 0 0 10px rgba(255, 165, 0, 0.1);
   }
   
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+    border-bottom: 1px solid rgba(255, 165, 0, 0.3);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
   
   h2 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     letter-spacing: 2px;
-    text-shadow: 0 0 5px #0f0;
-  }
-  
-  .lock-icon {
-    color: #0f0;
-  }
-  
-  .panel-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
   }
   
   .status-box {
     padding: 0.5rem;
-    background: rgba(0, 20, 0, 0.6);
-    border: 1px dashed #0f0;
+    background: rgba(0,0,0,0.5);
+    border: 1px dashed #fa0;
     margin-bottom: 1rem;
     text-align: center;
     font-weight: bold;
-    font-size: 0.9rem;
   }
   
   .status-box.alert {
     border-color: #f00;
     color: #f00;
-    background: rgba(20, 0, 0, 0.6);
     animation: flash 1s infinite;
   }
   
@@ -106,47 +93,35 @@
   }
   
   input {
-    background: rgba(0, 20, 0, 0.5);
-    border: 1px solid #0f0;
-    color: #0f0;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid #fa0;
+    color: #fa0;
     padding: 0.5rem;
     font-family: inherit;
-    outline: none;
-  }
-  
-  input::placeholder {
-    color: rgba(0, 255, 0, 0.4);
   }
   
   button {
-    background: transparent;
-    color: #0f0;
-    border: 1px solid #0f0;
+    background: #fa0;
+    color: #000;
+    border: none;
     padding: 0.5rem;
     font-weight: bold;
     cursor: pointer;
-    transition: all 0.2s;
-    text-transform: uppercase;
+    transition: background 0.2s;
   }
   
   button:hover {
-    background: #0f0;
-    color: #000;
-    box-shadow: 0 0 10px #0f0;
+    background: #ffb732;
   }
   
   .vault-log {
     margin-top: 1rem;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     opacity: 0.8;
-    background: rgba(0,0,0,0.5);
-    padding: 0.5rem;
-    border-left: 2px solid #0f0;
-    word-wrap: break-word;
   }
   
   @keyframes flash {
-    0%, 100% { box-shadow: inset 0 0 10px rgba(255,0,0,0.2); }
-    50% { box-shadow: inset 0 0 20px rgba(255,0,0,0.5); }
+    0%, 100% { background: rgba(255,0,0,0.1); }
+    50% { background: rgba(255,0,0,0.3); }
   }
 </style>

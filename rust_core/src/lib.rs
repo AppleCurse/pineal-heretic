@@ -12,12 +12,9 @@ pub mod task_isolation;
 pub mod agents;
 pub mod aspasia;
 pub mod tauri_bridge;
-pub mod scrapers;
-pub mod aspasia_bridge;
-pub mod llm_client;
 
 pub use uncertainty::{ConfidenceLevel, UncertaintyEngine, UncertaintyError, InsufficientEvidence, Evidence, Severity};
-pub use vault::{StealthVault, VaultError};
+pub use vault::{StealthVault, VaultError, EncryptedPayload};
 pub use event_bus::{EventBus, AgentEvent, TelemetryEvent, Severity as EventSeverity};
 pub use chief::{ChiefEngine, ExecutiveSummary};
 pub use aspasia::{AspasiaEngine, ASPASIA_SYSTEM_PROMPT};

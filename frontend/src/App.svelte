@@ -6,17 +6,14 @@
   import FrequencyPanel from './components/FrequencyPanel.svelte';
   import RadarPanel from './components/RadarPanel.svelte';
   import VaultPanel from './components/VaultPanel.svelte';
-  import RealAspasiaPanel from './components/RealAspasiaPanel.svelte';
-  import { scrapedUsername, scrapedBio, scrapedPosts, isScraping, autoTriggerLLM } from './store';
+  import AspasiaPanel from './components/AspasiaPanel.svelte';
 
   let telemetryData: any = null;
   let targetUrl = "";
   
-  onMount(() => {
-    let unlisten: (() => void) | undefined;
-    
+  onMount(async () => {
     // Listen for telemetry events from Rust backend
-    listen('pineal-telemetry', (event: any) => {
+    const unlisten = await listen('pineal-telemetry', (event: any) => {
       try {
         if (event.payload && event.payload.data) {
           telemetryData = JSON.parse(event.payload.data);
@@ -24,140 +21,73 @@
       } catch(e) {
         console.error("Telemetry parse error", e);
       }
-    }).then(u => { unlisten = u; });
+    });
     
     return () => {
-      if (unlisten) unlisten();
+      unlisten();
     };
   });
   
   async function triggerAnalysis() {
     if (!targetUrl) return;
     try {
-      isScraping.set(true);
-      telemetryData = { type: 'radar_alert', message: `HAYALET TARAYICI BAŞLATILDI: ${targetUrl}` };
-      
-      const profile: any = await invoke('run_osint_scraper', { targetUrl });
-      
-      if (profile.error) {
-        telemetryData = { type: 'radar_alert', message: `HATA: ${profile.error}` };
-      } else {
-        telemetryData = { type: 'radar_alert', message: `VERİ ÇEKİLDİ: ${profile.username}` };
-        
-        // Mağazayı güncelle
-        scrapedUsername.set(profile.username);
-        scrapedBio.set(profile.biography || "");
-        
-        const postTexts = profile.posts
-          .filter((p: any) => p.caption)
-          .map((p: any) => p.caption);
-          
-        scrapedPosts.set(postTexts);
-        autoTriggerLLM.set(true); // LLM analizini otomatik başlat
-      }
+      await invoke('start_analysis', { targetUrl });
+      telemetryData = { type: 'radar_alert', message: `ANALİZ BAŞLADI: ${targetUrl}` };
     } catch (e) {
-      telemetryData = { type: 'radar_alert', message: `ÇÖKME: ${e}` };
-    } finally {
-      isScraping.set(false);
+      telemetryData = { type: 'radar_alert', message: `HATA: ${e}` };
     }
   }
 </script>
 
-<main class="cockpit-container">
+<main class="container">
   <div class="header-section">
-    <div class="logo-area">
-      <h1>[ PINEAL_HERETIC ]</h1>
-      <span class="status-blink">SYS.ON // OTONOM_RADAR</span>
-    </div>
-    
+    <h1>PINEAL HERETIC // KOKPİT</h1>
     <div class="analysis-bar">
-      <div class="input-wrapper">
-        <span class="prompt">></span>
-        <input type="text" bind:value={targetUrl} placeholder="HEDEF KİMLİĞİ GİRİN (Örn: https://x.com/hedef)" />
-      </div>
-      <button on:click={triggerAnalysis} class="btn-scan">
-        <span class="btn-text">TARAMAYI BAŞLAT</span>
-        <span class="btn-glitch"></span>
-      </button>
+      <input type="text" bind:value={targetUrl} placeholder="HEDEF URL GİRİN (Örn: https://x.com/target)" />
+      <button on:click={triggerAnalysis}>ANALİZ BAŞLAT</button>
     </div>
   </div>
 
-  <div class="grid-layout">
-    <div class="panel-wrapper"><FrequencyPanel {telemetryData} /></div>
-    <div class="panel-wrapper"><RadarPanel {telemetryData} /></div>
-    <div class="panel-wrapper"><VaultPanel /></div>
-    <div class="panel-wrapper span-full"><RealAspasiaPanel /></div>
+  <div class="grid">
+    <div class="grid-item"><FrequencyPanel {telemetryData} /></div>
+    <div class="grid-item"><RadarPanel {telemetryData} /></div>
+    <div class="grid-item"><VaultPanel {telemetryData} /></div>
+    <div class="grid-item aspasia"><AspasiaPanel {telemetryData} /></div>
   </div>
-  
-  <div class="scanlines"></div>
 </main>
 
 <style>
   :global(body) {
     margin: 0;
     padding: 0;
-    background-color: #020202;
-    color: #0f0;
-    font-family: 'Share Tech Mono', 'Courier New', monospace;
+    background-color: #050505;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
     overflow: hidden;
   }
   
-  .cockpit-container {
+  .container {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    padding: 1.5rem;
+    padding: 1rem;
     box-sizing: border-box;
-    position: relative;
-    z-index: 1;
-    background: radial-gradient(circle at center, #051505 0%, #000 100%);
-  }
-  
-  /* CRT Scanline Effect */
-  .scanlines {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: linear-gradient(
-      to bottom,
-      rgba(255,255,255,0),
-      rgba(255,255,255,0) 50%,
-      rgba(0,0,0,0.2) 50%,
-      rgba(0,0,0,0.2)
-    );
-    background-size: 100% 4px;
-    pointer-events: none;
-    z-index: 999;
-    opacity: 0.6;
   }
   
   .header-section {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #0f0;
+    border-bottom: 2px solid #333;
     padding-bottom: 1rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 4px 10px rgba(0,255,0,0.1);
-  }
-  
-  .logo-area {
-    display: flex;
-    flex-direction: column;
+    margin-bottom: 1rem;
   }
   
   h1 {
     margin: 0;
-    color: #0f0;
-    text-shadow: 0 0 8px #0f0;
-    letter-spacing: 2px;
-    font-size: 1.8rem;
-  }
-  
-  .status-blink {
-    font-size: 0.8rem;
-    color: #0a0;
-    animation: blink 2s infinite;
-    margin-top: 4px;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    letter-spacing: 4px;
   }
   
   .analysis-bar {
@@ -165,83 +95,49 @@
     gap: 1rem;
     flex: 1;
     max-width: 600px;
-    align-items: center;
   }
   
-  .input-wrapper {
-    display: flex;
-    align-items: center;
-    background: rgba(0, 20, 0, 0.5);
-    border: 1px solid #0f0;
+  .analysis-bar input {
     flex: 1;
-    padding: 0 10px;
-  }
-  
-  .prompt {
+    background: #111;
+    border: 1px solid #555;
     color: #0f0;
-    font-weight: bold;
-    margin-right: 10px;
-  }
-  
-  .input-wrapper input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: #0f0;
-    padding: 10px 0;
+    padding: 0.5rem;
     font-family: inherit;
-    outline: none;
   }
   
-  .btn-scan {
-    position: relative;
-    background: #0f0;
-    color: #000;
-    border: 1px solid #0f0;
-    padding: 10px 20px;
+  .analysis-bar button {
+    background: #f00;
+    color: #fff;
+    border: none;
+    padding: 0.5rem 1rem;
     font-weight: bold;
     cursor: pointer;
-    text-transform: uppercase;
-    font-family: inherit;
-    letter-spacing: 1px;
-    overflow: hidden;
-    transition: all 0.3s;
+    text-shadow: 0 0 5px #fff;
+    transition: background 0.2s;
   }
   
-  .btn-scan:hover {
-    background: #1aff1a;
-    box-shadow: 0 0 15px #0f0;
+  .analysis-bar button:hover {
+    background: #ff3333;
+    box-shadow: 0 0 10px #f00;
   }
   
-  .btn-scan:active {
-    transform: scale(0.98);
-  }
-  
-  .grid-layout {
+  .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr;
-    gap: 1.5rem;
+    gap: 1rem;
     flex: 1;
     min-height: 0;
   }
   
-  .panel-wrapper {
+  .grid-item {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border: 1px solid rgba(0, 255, 0, 0.3);
-    background: rgba(0, 10, 0, 0.4);
-    box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.05);
-    backdrop-filter: blur(2px);
   }
   
-  .span-full {
+  .grid-item.aspasia {
     grid-column: 1 / -1;
-  }
-  
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
   }
 </style>

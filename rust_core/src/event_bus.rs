@@ -50,12 +50,6 @@ pub enum AgentEvent {
         final_result_hash: String,
         duration_ms: u64,
     },
-    
-    /// Jenerik Telemetri / UI Loglama
-    TelemetryLog {
-        agent_name: String,
-        message: String,
-    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

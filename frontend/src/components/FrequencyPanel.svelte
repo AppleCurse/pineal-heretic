@@ -31,66 +31,57 @@
 
 <style>
   .panel {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
+    border: 1px solid rgba(0, 255, 100, 0.3);
+    background: rgba(10, 15, 10, 0.8);
     padding: 1rem;
     color: #0f0;
-    font-family: 'Share Tech Mono', monospace;
+    font-family: 'Courier New', Courier, monospace;
+    box-shadow: inset 0 0 10px rgba(0, 255, 100, 0.1);
   }
   
   .panel-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+    border-bottom: 1px solid rgba(0, 255, 100, 0.3);
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
   }
   
   h2 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     letter-spacing: 2px;
-    text-shadow: 0 0 5px #0f0;
   }
   
   .status-indicator {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: #030;
+    background: #333;
   }
   
   .status-indicator.active {
     background: #0f0;
-    box-shadow: 0 0 10px #0f0;
-    animation: pulse 1.5s infinite;
-  }
-  
-  .panel-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    justify-content: center;
+    box-shadow: 0 0 8px #0f0;
+    animation: pulse 2s infinite;
   }
   
   .analog-display {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
   }
   
   .value {
-    font-size: 2.5rem;
+    font-size: 2rem;
     text-align: right;
-    text-shadow: 0 0 15px rgba(0,255,0,0.5);
   }
   
   .bar-container {
-    height: 25px;
-    background: rgba(0, 20, 0, 0.5);
-    border: 1px solid #0f0;
+    height: 20px;
+    background: #111;
+    border: 1px solid #333;
     overflow: hidden;
   }
   
@@ -98,12 +89,11 @@
     height: 100%;
     background: linear-gradient(90deg, #050, #0f0);
     transition: width 0.2s ease-out;
-    box-shadow: 0 0 10px #0f0;
   }
   
   @keyframes pulse {
-    0% { opacity: 0.4; }
-    50% { opacity: 1; box-shadow: 0 0 15px #0f0; }
-    100% { opacity: 0.4; }
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
   }
 </style>
