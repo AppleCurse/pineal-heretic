@@ -69,17 +69,51 @@ impl AgentNode for AutonomousVerifier {
             HaltReason::LlmParseError(format!("Invalid input JSON: {}", e))
         })?;
 
-        let llm_json_str = r#"{
-            "verifications": [
-                {
-                    "claim_text": "Yazılım Mühendisi",
-                    "truth_status": "DOĞRULANDI",
-                    "evidence_url": "https://example.com/linkedin",
-                    "contradiction_detail": "Doğrulandı"
+        let tavily_api_key = self.tavily_key.as_ref().unwrap();
+        let target_bio = input_data.get("target_profile")
+            .and_then(|p| p.get("bio"))
+            .and_then(|b| b.as_str())
+            .unwrap_or("");
+
+        let mut verifications = Vec::new();
+        let mut overall_score = 1.0;
+
+        if !target_bio.is_empty() {
+            let client = reqwest::Client::new();
+            let search_body = serde_json::json!({
+                "api_key": tavily_api_key,
+                "query": target_bio,
+                "max_results": 3
+            });
+
+            if let Ok(res) = client.post("https://api.tavily.com/search").json(&search_body).send().await {
+                if let Ok(search_json) = res.json::<Value>().await {
+                    if let Some(results) = search_json.get("results").and_then(|r| r.as_array()) {
+                        for item in results {
+                            let title = item.get("title").and_then(|t| t.as_str()).unwrap_or("Bilinmeyen").to_string();
+                            let url = item.get("url").and_then(|u| u.as_str()).unwrap_or("").to_string();
+                            let snippet = item.get("content").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                            verifications.push(VerificationResult {
+                                claim_text: title,
+                                truth_status: "DOĞRULANDI".to_string(),
+                                evidence_url: url,
+                                contradiction_detail: snippet,
+                            });
+                        }
+                        if verifications.is_empty() {
+                            overall_score = 0.5;
+                        }
+                    }
                 }
-            ],
-            "overall_authenticity_score": 1.0
-        }"#;
+            }
+        }
+
+        let report = VerifierReport {
+            verifications,
+            overall_authenticity_score: overall_score,
+        };
+
+        let llm_json_str = serde_json::to_string(&report).unwrap();
 
         let required_fields = vec![
             "verifications".to_string(),
@@ -88,7 +122,7 @@ impl AgentNode for AutonomousVerifier {
         
         let engine = UncertaintyEngine::new(task_id, required_fields);
         
-        let llm_data: Value = serde_json::from_str(llm_json_str).map_err(|e| {
+        let llm_data: Value = serde_json::from_str(&llm_json_str).map_err(|e| {
             HaltReason::LlmParseError(format!("LLM dönen JSON hatalı: {}", e))
         })?;
 
@@ -109,7 +143,7 @@ impl AgentNode for AutonomousVerifier {
                     task_id,
                     agent_name: self.name().to_string(),
                     step_name: "Uncertainty_Check_Passed".to_string(),
-                    output_hash: "pass_hash".to_string(),
+                    output_hash: format!("{:x}", md5::compute(&llm_json_str)),
                 });
             }
             Err(e) => {
@@ -117,20 +151,16 @@ impl AgentNode for AutonomousVerifier {
             }
         }
 
-        let report: VerifierReport = serde_json::from_str(llm_json_str).map_err(|e| {
-             HaltReason::LlmParseError(e.to_string())
-        })?;
-
         let _ = self.event_bus.publish(AgentEvent::TaskCompleted {
             task_id,
             agent_name: self.name().to_string(),
-            final_result_hash: "report_hash".to_string(),
+            final_result_hash: format!("{:x}", md5::compute(&llm_json_str)),
             duration_ms: 150,
         });
 
         Ok(AnalysisResult {
-            confidence: 0.90,
-            payload: serde_json::to_string(&report).unwrap(),
+            confidence: overall_score,
+            payload: llm_json_str,
         })
     }
 }

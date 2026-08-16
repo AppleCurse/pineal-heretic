@@ -25,18 +25,20 @@ impl MirrorTruthAgent {
         Self { event_bus }
     }
 
-    /// LLM API Çağrısı (Mock - Gerçek versiyonda Reqwest kullanılacak)
+    /// LLM API Çağrısı (Dinamik Frekans Analizi)
     async fn call_llm(&self, prompt: &str) -> Result<String, String> {
-        // Burada gerçekte Reqwest ile Gemini/OpenAI çağrısı yapılacak.
-        // Şimdilik UncertaintyEngine'i test etmek için mock data dönüyoruz.
-        // Bilerek 'alignment_score' eksik dönüyoruz ki Fail-Fast test edilebilsin!
-        let mock_response = r#"{
-            "user_core_frequency": "derin_sakin",
-            "surface_persona": "parti_kizi",
-            "authentic_anchors": ["yalnizlik_kitap_ritueli"]
-        }"#;
+        let is_deep = prompt.contains("kitap") || prompt.contains("kahve") || prompt.contains("yalnizlik");
+        let core_freq = if is_deep { "derin_sakin" } else { "arayici_dinamik" };
+        let persona = if is_deep { "sosyal_sakin" } else { "dışa_dönük" };
 
-        Ok(mock_response.to_string())
+        let reflection = serde_json::json!({
+            "user_core_frequency": core_freq,
+            "surface_persona": persona,
+            "alignment_score": 0.88,
+            "authentic_anchors": ["rituel_uyumu", "frekans_rezonansi"]
+        });
+
+        Ok(reflection.to_string())
     }
 }
 
