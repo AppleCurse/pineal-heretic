@@ -50,6 +50,15 @@ pub enum AgentEvent {
         final_result_hash: String,
         duration_ms: u64,
     },
+    
+    /// Frekans güncellemesi (user rituals/playlist/envies analizi)
+    FrequencyUpdate {
+        task_id: Uuid,
+        ritual_match_score: f32,
+        playlist_resonance: f32,
+        envy_intensity: f32,
+        overall_frequency: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

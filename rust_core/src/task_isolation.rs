@@ -52,9 +52,9 @@ impl TaskManager {
         self.tasks.lock().unwrap().get(task_id).cloned()
     }
 
-    /// Tam ajan hattı: Scraper + PinealExecutor zinciri
+    /// Tam ajan hattı: Scraper + rust_bridge_agent (PinealExecutor zinciri)
     /// target_url, user_rituals, user_playlist, user_envies parametrelerini alıp
-    /// agent_core/task_executor.py (PinealExecutor) üzerinden işler
+    /// agent_core/agents/rust_bridge_agent.py üzerinden işler
     pub async fn execute_isolated_task(
         &self,
         target_url: String,
@@ -66,7 +66,7 @@ impl TaskManager {
 
         let _ = self.event_bus.publish(AgentEvent::TaskStarted {
             task_id,
-            agent_name: "TaskManager(PinealExecutor)".to_string(),
+            agent_name: "TaskManager(rust_bridge_agent)".to_string(),
             input_summary: format!(
                 "X profili kazınıyor: {}, ritüeller: {}, playlist: {}, envies: {}",
                 target_url,
@@ -76,21 +76,26 @@ impl TaskManager {
             ),
         });
 
-        // Python PinealExecutor'ı çalıştır - scraper ve executor zinciri
+        // Proje kökünü bul
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+            .unwrap_or_else(|_| "/workspace/rust_core".to_string());
+        let project_root = std::path::Path::new(&manifest_dir)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/workspace".to_string());
+        let bridge_agent_path = format!("{}/agent_core/agents/rust_bridge_agent.py", project_root);
+
+        // Önce scraper.py ile veriyi çek, sonra rust_bridge_agent.py ile tam pipeline çalıştır
         let python_script = format!(
             r#"
 import sys
 import json
 sys.path.insert(0, '/workspace')
 
-# Önce scraper.py ile veriyi çek
+# 1. Adım: Scraper ile profil verisini çek
 from scraper import scrape_readonly
 
-# Sonra task_executor.py ile PinealExecutor zincirine sok
-from agent_core.task_executor import PinealExecutor
-
 try:
-    # 1. Adım: Scraper ile profil verisini çek
     profile_data = scrape_readonly('{}')
     
     if not profile_data or 'error' in profile_data:
@@ -98,27 +103,23 @@ try:
         sys.exit(0)
     
     # 2. Adım: Kullanıcı frekans parametrelerini hazırla
-    user_context = {{
+    user_freq = {{
         "rituals": {},
         "playlist": {},
         "envies": {}
     }}
     
-    # 3. Adım: PinealExecutor ile tam analiz zincirini çalıştır
-    executor = PinealExecutor()
-    result = executor.execute_task(
-        target_profile=profile_data,
-        user_context=user_context,
-        task_id="{}"
-    )
+    # 3. Adım: rust_bridge_agent.py ile tam analiz pipeline'ını çalıştır
+    sys.argv = ['rust_bridge_agent.py', '{}', json.dumps(profile_data), json.dumps(user_freq)]
+    
+    # Import ve çalıştır
+    from agent_core.agents.rust_bridge_agent import run_full_pipeline
+    final_report = run_full_pipeline('{}', profile_data, user_freq)
     
     # 4. Adım: Sonucu JSON olarak döndür
     output = {{
         "status": "success",
-        "data": {{
-            "profile": profile_data,
-            "analysis": result
-        }}
+        "data": final_report
     }}
     print(json.dumps(output))
     
@@ -135,7 +136,8 @@ except Exception as e:
             serde_json::to_string(&user_rituals).unwrap_or("[]".to_string()),
             serde_json::to_string(&user_playlist).unwrap_or("[]".to_string()),
             serde_json::to_string(&user_envies).unwrap_or("[]".to_string()),
-            task_id.to_string()
+            target_url,
+            target_url
         );
 
         let output = Command::new(&self.python_path)
@@ -184,16 +186,33 @@ except Exception as e:
 
         // Başarılı sonuç - EventBus'a telemetry gönder
         let data = json_result.get("data").unwrap_or(&json_result);
+        
+        // Frekans verilerini çıkar ve FrequencyUpdate event'i yayınla
+        if let Some(analysis) = data.get("mirror_analysis") {
+            let ritual_score = analysis.get("ritual_match_score").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let playlist_score = analysis.get("playlist_resonance").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let envy_score = analysis.get("envy_intensity").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let overall_freq = analysis.get("user_core_frequency").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+            
+            let _ = self.event_bus.publish(AgentEvent::FrequencyUpdate {
+                task_id,
+                ritual_match_score: ritual_score,
+                playlist_resonance: playlist_score,
+                envy_intensity: envy_score,
+                overall_frequency: overall_freq,
+            });
+        }
+        
         let _ = self.event_bus.publish(AgentEvent::StepCompleted {
             task_id,
-            agent_name: "TaskManager(PinealExecutor)".to_string(),
+            agent_name: "TaskManager(rust_bridge_agent)".to_string(),
             step_name: "FullPipelineCompleted".to_string(),
             output_hash: format!("{:x}", md5::compute(data.to_string())),
         });
 
         let _ = self.event_bus.publish(AgentEvent::TaskCompleted {
             task_id,
-            agent_name: "TaskManager(PinealExecutor)".to_string(),
+            agent_name: "TaskManager(rust_bridge_agent)".to_string(),
             final_result_hash: format!("{:x}", md5::compute(stdout.to_string())),
             duration_ms: 150,
         });
