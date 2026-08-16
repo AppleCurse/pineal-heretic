@@ -139,34 +139,57 @@ class IntegratedStrategyEngine:
         
         return sequence
     
-    def _craft_wound_hook(self, psych: PsychologicalProfile, dop: DopamineProfile) -> str:
+    def _craft_wound_hook(self, psych: PsychologicalProfile, dop: DopamineProfile,
+                          llm_gateway=None) -> str:
         """
-        Yara + Near Miss = Anında çekim
+        Yara + Near Miss = Anlık cekim.
+        FAZ 3: LLM varsa dinamik uret, yoksa statik dict fallback.
         """
         wound = psych.core_wound
-        
+
+        if llm_gateway is not None:
+            try:
+                import asyncio
+                prompt = (
+                    f"Bir kisinin temel yarasi: '{wound}'. "
+                    f"Bu kisiye yonelik, yarasina dokunan ama yaklasmayan (near-miss), "
+                    f"merak uyandiran, samimi bir ilk mesaj yaz. "
+                    f"Mesaj 1-2 cumle, dogal dilde, sablondan uzak olmali. "
+                    f"Sadece mesaji yaz, aciklama ekleme."
+                )
+                result = asyncio.get_event_loop().run_until_complete(
+                    llm_gateway.query(prompt, temperature=0.85, tier=1)
+                ) if asyncio.get_event_loop().is_running() else ""
+                if result.strip():
+                    base_hook = result.strip()
+                    if dop.chase_sensitivity > 0.6:
+                        base_hook += " Bir daha denemeliyim..."
+                    sense = self.sensory.detect_dominant_sense(str(psych.__dict__))
+                    return self.sensory.craft_sensory_hook(base_hook, sense)
+            except Exception:
+                pass  # LLM hatasi: fallback dict'e dus
+
+        # Fallback: statik sozluk (LLM yoksa)
         hooks = {
             'abandonment': [
-                "O an yalnız kaldığını hissettiğin... Neredeyse sana ulaşacaktım ama kayboldu.",
-                "Sensizlik en çok o saatlerde hissediliyor. Tam oradaydım ama görünmedim."
+                "O an yalniz kaldigini hissettigin... Neredeyse sana ulasacaktim ama kayboldu.",
+                "Sensizlik en cok o saatlerde hissediliyor. Tam oradaydim ama gorünmedim."
             ],
             'shame': [
-                "O mükemmel pozların ardındaki yorgunluğu görüyorum. Neredeyse anlayacaktın...",
-                "Maske yorucu olmalı. Tam gerçek seni görecektim ama kapandın."
+                "O mukemmel pozlarin ardindaki yorgunlugu goruyorum. Neredeyse anlayacaktın...",
+                "Maske yorucu olmali. Tam gercek seni gorecektim ama kapandin."
             ],
             'betrayal': [
-                "Güvenmek zor. Tam sana ulaşacaktım ama duvarını gördüm.",
-                "İhanet hissi... Neredeyse seni anlayacaktım ama kaçtın."
+                "Guvenmek zor. Tam sana ulasacaktim ama duvarin gordüm.",
+                "Ihanet hissi... Neredeyse seni anlayacaktim ama kactin."
             ]
         }
-        
+
         base_hook = random.choice(hooks.get(wound, hooks['abandonment']))
-        
-        # Dopamin ekle: Değişken ödül sinyali
+
         if dop.chase_sensitivity > 0.6:
             base_hook += " Bir daha denemeliyim..."
-        
-        # Duyusal kanal ekle
+
         sense = self.sensory.detect_dominant_sense(str(psych.__dict__))
         return self.sensory.craft_sensory_hook(base_hook, sense)
     

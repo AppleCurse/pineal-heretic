@@ -90,9 +90,9 @@ impl TaskManager {
             r#"
 import sys
 import json
-sys.path.insert(0, '/workspace')
+sys.path.insert(0, r'{}')
 
-# 1. Adım: Scraper ile profil verisini çek
+# 1. Adim: Scraper ile profil verisini cek
 from scraper import scrape_readonly
 
 try:
@@ -132,6 +132,7 @@ except Exception as e:
         "traceback": error_detail
     }}))
 "#,
+            project_root,
             target_url,
             serde_json::to_string(&user_rituals).unwrap_or("[]".to_string()),
             serde_json::to_string(&user_playlist).unwrap_or("[]".to_string()),

@@ -3,10 +3,26 @@
   
   // Tactical Radar Panel
   let alerts: string[] = [];
+  let sweepSpeed = 2.0;  // saniye - varsayilan
+  let radarIntensity = 0.2;  // grid opacity
   
   $: {
     if (telemetryData && telemetryData.type === 'radar_alert') {
       alerts = [telemetryData.message, ...alerts].slice(0, 5);
+    }
+    // FAZ 4B: FrequencyUpdate telemetrisi → radar animasyonu guncelle
+    if (telemetryData && telemetryData.type === 'frequency_update') {
+      const ritual = telemetryData.ritual_match_score ?? 0;
+      const envy = telemetryData.envy_intensity ?? 0;
+      const playlist = telemetryData.playlist_resonance ?? 0;
+      const avgScore = (ritual + envy + playlist) / 3;
+
+      // Skor 0 → 2 sn (yavas), Skor 1 → 0.4 sn (cok hizli)
+      sweepSpeed = Math.max(0.4, 2.0 - avgScore * 1.6);
+      // Skor 0 → 0.2 opacity, Skor 1 → 0.6 opacity
+      radarIntensity = 0.2 + avgScore * 0.4;
+
+      alerts = [`⚡ Frekans: R=${ritual.toFixed(2)} P=${playlist.toFixed(2)} E=${envy.toFixed(2)}`, ...alerts].slice(0, 5);
     }
   }
 </script>
@@ -14,11 +30,11 @@
 <div class="panel radar-panel">
   <div class="panel-header">
     <h2>02 TAKTİK RADAR</h2>
-    <div class="radar-sweep"></div>
+    <div class="radar-sweep-label">⚡</div>
   </div>
   
   <div class="panel-content">
-    <div class="radar-circle">
+    <div class="radar-circle" style="--sweep-speed:{sweepSpeed}s; --radar-intensity:{radarIntensity}">
       <div class="sweep"></div>
       <div class="grid"></div>
     </div>
@@ -89,7 +105,18 @@
     height: 2px;
     background: linear-gradient(90deg, rgba(0,204,255,0) 0%, #0cf 100%);
     transform-origin: left center;
-    animation: sweep 2s linear infinite;
+    animation: sweep var(--sweep-speed, 2s) linear infinite;
+  }
+  
+  .grid {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: 
+      linear-gradient(#0cf 1px, transparent 1px),
+      linear-gradient(90deg, #0cf 1px, transparent 1px);
+    background-size: 20px 20px;
+    opacity: var(--radar-intensity, 0.2);
+    border-radius: 50%;
   }
   
   .alert-log {

@@ -18,8 +18,10 @@
     inputMessage = "";
     
     try {
-      // In Phase 4, we query Aspasia via Tauri IPC
-      const response: string = await invoke('query_aspasia');
+      // FAZ 4A: Kullanici mesajini Rust'a ilet — artik yutuImuyor
+      const response: string = await invoke('query_aspasia', {
+        userMessage: currentInput
+      });
       messages = [...messages, { sender: 'ASPASIA', text: response }];
     } catch (error) {
       messages = [...messages, { sender: 'SİSTEM', text: `HATA: ${error}` }];
