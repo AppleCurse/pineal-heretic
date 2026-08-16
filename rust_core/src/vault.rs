@@ -210,14 +210,16 @@ impl StealthVault {
 
         let mut decrypted = Vec::new();
         {
-            let identities: Vec<Box<dyn age::Identity>> = vec![Box::new(self.identity.clone())];
-            let reader_result = decryptor.decrypt(&identities);
-            
-            let mut reader = match reader_result {
-                Ok(r) => r,
-                Err(e) => return Err(VaultError::DecryptionError(format!("age decrypt hatası: {}", e))),
+            // Decryptor enum'unu aç - Recipients variant'ını kullanıyoruz
+            let recipient_decryptor = match decryptor {
+                Decryptor::Recipients(d) => d,
+                _ => return Err(VaultError::DecryptionError("Beklenmeyen age decryptor tipi".to_string())),
             };
-
+            
+            let identities: Vec<Box<dyn age::Identity>> = vec![Box::new(self.identity.clone())];
+            let mut reader = recipient_decryptor.decrypt(identities.iter().map(|i| i.as_ref()))
+                .map_err(|e| VaultError::DecryptionError(format!("age decrypt hatası: {}", e)))?;
+            
             reader.read_to_end(&mut decrypted)
                 .map_err(|e| VaultError::DecryptionError(format!("age read hatası: {}", e)))?;
         }

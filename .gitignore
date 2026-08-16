@@ -1,29 +1,20 @@
 ```
-# Rust/Cargo specific
+# Dependencies
 Cargo.lock
+
+# Rust build artifacts
 target/
 **/*.rs.bk
-**/*.tmp
 
-# Dependencies
-vendor/
+# IDE
+.vscode/
+.idea/
 
-# Logs and temp files
+# Logs
 *.log
-*.tmp
 
 # Environment
 .env
 .env.local
 *.env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
 ```

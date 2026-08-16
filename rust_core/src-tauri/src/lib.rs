@@ -8,8 +8,21 @@ use std::path::Path;
 
 // Tauri komutları
 #[tauri::command]
-async fn start_analysis(target_url: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let result = state.task_manager.execute_isolated_task(target_url).await;
+async fn start_analysis(
+    target_url: String,
+    _scraper_type: Option<String>,
+    _user_rituals: Option<Vec<String>>,
+    _user_playlist: Option<Vec<String>>,
+    _user_envies: Option<Vec<String>>,
+    state: tauri::State<'_, CoreState>,
+) -> Result<String, String> {
+    // Şimdilik sadece target_url kullanıyoruz, diğer parametreler ileride eklenecek
+    let result = state.task_manager.execute_isolated_task(
+        target_url,
+        _user_rituals.unwrap_or_default(),
+        _user_playlist.unwrap_or_default(),
+        _user_envies.unwrap_or_default(),
+    ).await;
     result.map_err(|e| format!("Analiz başlatılamadı: {}", e))
 }
 
@@ -35,9 +48,10 @@ pub fn run() {
     
     let aspasia = AspasiaEngine::new(chief, "dummy_api_key".to_string());
     
-    let vault = StealthVault::new(Path::new(".pineal_vault")).expect("Vault oluşturulamadı");
+    // Vault'ı Option olarak başlat - henüz password yok
+    let vault: Option<StealthVault> = None;
     
-    let task_manager = TaskManager::new();
+    let task_manager = TaskManager::new(event_bus.clone());
     
     // CoreState oluştur
     let core_state = CoreState {
