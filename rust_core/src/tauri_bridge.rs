@@ -23,12 +23,38 @@ pub struct TauriEventPayload {
     pub data: String,
 }
 
-/// 1. Tauri IPC Commands
+/// Frekans parametreleri için yapı
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrequencyParams {
+    pub rituals: Vec<String>,
+    pub playlist: Vec<String>,
+    pub envies: Vec<String>,
+}
+
+/// 1. Tauri IPC Commands - Genişletilmiş Parametreler
 
 #[tauri::command]
-pub async fn start_analysis(target_url: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    // Python scraper'ı alt süreç olarak çalıştır, gerçek veri çek
-    let result = state.task_manager.execute_isolated_task(target_url).await;
+pub async fn start_analysis(
+    target_url: String,
+    scraper_type: Option<String>,
+    user_rituals: Option<Vec<String>>,
+    user_playlist: Option<Vec<String>>,
+    user_envies: Option<Vec<String>>,
+    state: tauri::State<'_, CoreState>,
+) -> Result<String, String> {
+    // Varsayılan değerler
+    let rituals = user_rituals.unwrap_or_default();
+    let playlist = user_playlist.unwrap_or_default();
+    let envies = user_envies.unwrap_or_default();
+
+    // Python scraper + PinealExecutor zincirini çalıştır, gerçek veri çek
+    let result = state.task_manager.execute_isolated_task(
+        target_url,
+        rituals,
+        playlist,
+        envies,
+    ).await;
+    
     result.map_err(|e| format!("Analiz başlatılamadı: {}", e))
 }
 
@@ -42,37 +68,37 @@ pub async fn query_aspasia(state: tauri::State<'_, CoreState>) -> Result<String,
 #[tauri::command]
 pub async fn create_vault(password: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
     let vault_path = std::path::PathBuf::from("/tmp/pineal_vault.json");
-    
+
     let vault = StealthVault::new(&vault_path, &password)
         .map_err(|e| format!("Vault oluşturulamadı: {}", e))?;
-    
+
     let mut vault_state = state.vault.lock().await;
     *vault_state = Some(vault);
-    
+
     Ok("Vault başarıyla oluşturuldu.".to_string())
 }
 
 #[tauri::command]
 pub async fn open_vault(password: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
     let vault_path = std::path::PathBuf::from("/tmp/pineal_vault.json");
-    
+
     if !vault_path.exists() {
         return Err("Vault dosyası bulunamadı. Önce vault oluşturun.".to_string());
     }
-    
+
     let vault = StealthVault::load(&vault_path, &password)
         .map_err(|e| format!("Vault açılamadı: {}", e))?;
-    
+
     let mut vault_state = state.vault.lock().await;
     *vault_state = Some(vault);
-    
+
     Ok("Vault başarıyla açıldı.".to_string())
 }
 
 #[tauri::command]
 pub async fn set_vault_credentials(key: String, value: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
     let vault_state = state.vault.lock().await;
-    
+
     match vault_state.as_ref() {
         Some(vault) => {
             // Veriyi şifreli olarak kasaya koy
@@ -80,11 +106,11 @@ pub async fn set_vault_credentials(key: String, value: String, state: tauri::Sta
             struct Credential {
                 value: String,
             }
-            
+
             let cred = Credential { value };
             vault.store(&key, &cred)
                 .map_err(|e| format!("Kasaya yazılamadı: {}", e))?;
-            
+
             Ok(format!("{} başarıyla kasaya eklendi.", key))
         }
         None => Err("Vault açık değil. Önce vault oluşturun veya açın.".to_string())
@@ -94,17 +120,17 @@ pub async fn set_vault_credentials(key: String, value: String, state: tauri::Sta
 #[tauri::command]
 pub async fn get_vault_credentials(key: String, state: tauri::State<'_, CoreState>) -> Result<String, String> {
     let vault_state = state.vault.lock().await;
-    
+
     match vault_state.as_ref() {
         Some(vault) => {
             #[derive(Deserialize)]
             struct Credential {
                 value: String,
             }
-            
+
             let cred: Credential = vault.retrieve(&key)
                 .map_err(|e| format!("Kasadan okunamadı: {}", e))?;
-            
+
             Ok(cred.value)
         }
         None => Err("Vault açık değil. Önce vault oluşturun veya açın.".to_string())
@@ -121,7 +147,7 @@ pub fn setup_telemetry_bridge(app_handle: AppHandle, mut rx: tokio::sync::broadc
                     event_type: "telemetry_update".to_string(),
                     data: json_str,
                 };
-                
+
                 // Tauri arayüzüne (Svelte) gönder
                 let _ = app_handle.emit("pineal-telemetry", payload);
             }

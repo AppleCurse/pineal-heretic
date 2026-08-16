@@ -1,29 +1,29 @@
-```
-# Rust-specific ignores
-target/
-Cargo.lock
-**/*.rs.bk
-**/*.tmp
+```gitignore
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Dependencies
-vendor/
+.venv/
+venv/
+env/
+pip-log.txt
+pip-selfcheck.json
 
-# Logs and temp files
+# Build and distribution artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+*.so
+
+# Logs
 *.log
-*.tmp
 
-# Environment
+# Environment variables
 .env
 .env.local
 .env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS generated files
-.DS_Store
-Thumbs.db
 ```
