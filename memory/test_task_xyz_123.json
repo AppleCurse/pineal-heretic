@@ -1,0 +1,13 @@
+{
+  "task_id": "test_task_xyz_123",
+  "last_updated": "2026-08-18T19:43:18.795225+00:00",
+  "evidence": [
+    {
+      "agent": "test_agent",
+      "result": {
+        "data": "test data"
+      }
+    }
+  ],
+  "confidence": 0.0
+}
