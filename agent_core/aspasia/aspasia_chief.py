@@ -76,25 +76,26 @@ class AspasiaChief:
 
     def parse_user_intent(self, user_msg: str) -> Optional[InterveneAction]:
         """Kullanıcının doğal dil mesajından müdahale komutunu tespit eder."""
+        import re
         msg = user_msg.lower()
-        if any(w in msg for w in ["devam et", "0.1'e rağmen", "ez", "override", "yinede çalıştır"]):
+        if re.search(r'\b(devam et|0\.1\'e rağmen|ez|override|yinede çalıştır)\b', msg):
             return InterveneAction(
                 action_type="OVERRIDE_CONFIDENCE",
                 reason="Mösyö düşük güven skoruna rağmen operasyonun devamını talep etti.",
                 parameters={"threshold": 0.0}
             )
-        elif any(w in msg for w in ["verifier atla", "verifier geç", "doğrulamayı atla"]):
+        elif re.search(r'\b(verifier atla|verifier geç|doğrulamayı atla)\b', msg):
             return InterveneAction(
                 action_type="SKIP_AGENT",
                 target_agent="autonomous_verifier",
                 reason="Mösyö otonom doğrulayıcının atlanmasını talep etti."
             )
-        elif any(w in msg for w in ["dur", "durdur", "iptal", "kes", "halt"]):
+        elif re.search(r'\b(dur|durdur|iptal|kes|halt)\b', msg):
             return InterveneAction(
                 action_type="HALT",
                 reason="Mösyö operasyonun derhal durdurulmasını emretti."
             )
-        elif any(w in msg for w in ["tekrar dene", "baştan al", "retry"]):
+        elif re.search(r'\b(tekrar dene|baştan al|retry)\b', msg):
             return InterveneAction(
                 action_type="RETRY_STEP",
                 reason="Mösyö adımı yeniden denemeyi talep etti."
