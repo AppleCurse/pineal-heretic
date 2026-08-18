@@ -159,7 +159,7 @@ class IntegratedStrategyEngine:
                 )
                 result = asyncio.get_event_loop().run_until_complete(
                     llm_gateway.query(prompt, temperature=0.85, tier=1)
-                ) if asyncio.get_event_loop().is_running() else ""
+                ) if not asyncio.get_event_loop().is_running() else ""
                 if result.strip():
                     base_hook = result.strip()
                     if dop.chase_sensitivity > 0.6:
