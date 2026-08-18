@@ -1,6 +1,6 @@
 import pytest
 import httpx
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from agent_core.llm.claude_client import ClaudeAnalyzer
 
 @pytest.fixture

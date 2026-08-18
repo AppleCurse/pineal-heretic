@@ -78,7 +78,7 @@ async def test_chat_fallback_on_exception(aspasia, mock_llm_gateway):
     mock_llm_gateway.query.side_effect = Exception("API Timeout")
     
     room_state = {"executor": True, "logs": ["Step 1"]}
-    response = await aspasia.chat("sistem ne durumda", room_state)
+    response = await aspasia.chat("sistem nasil", room_state)
     
     assert response.action is None
     assert "bağlantıda küçük bir kırılma oluşmuş olabilir" in response.message
