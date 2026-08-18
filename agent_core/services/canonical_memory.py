@@ -57,9 +57,20 @@ class CanonicalMemory:
         """
         # Basit çözüm: Daha yüksek confidence'lı kanıt kazanır
         all_evidence = old + new
-        return sorted(all_evidence, 
-                     key=lambda x: x.get('result', {}).get('confidence', 0), 
-                     reverse=True)
+        return sorted(all_evidence, key=lambda x: x.get('confidence', 0), reverse=True)
+        
+    def get_task_memory(self, task_id: str) -> dict:
+        """ Belleği oku, yoksa veya bozuksa boş dict dön. """
+        profile_file = os.path.join(self.storage_path, f"{task_id}.json")
+        if not os.path.exists(profile_file):
+            return {}
+        try:
+            with open(profile_file, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            import logging
+            logging.error(f"Memory corrupted for task {task_id}")
+            return {}
     
     def _calculate_overall_confidence(self, evidence: List[Dict]) -> float:
         if not evidence:

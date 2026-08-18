@@ -1,5 +1,5 @@
 import asyncio
-from task_executor import PinealExecutor
+from agent_core.task_executor import PinealExecutor
 # Register pattern_interrupt dynamically
 from agent_core.agents.pattern_interrupt import PatternInterrupt
 

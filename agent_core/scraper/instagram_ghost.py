@@ -24,7 +24,6 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 # --- Anti-Halüsinasyon Çekirdeği ---
 class InsufficientEvidenceError(Exception):
     """Kanıt yoksa uydurma, DUR. Faz 4 kuralı."""
-    pass
 
 
 # --- Pydantic V2 Şemalar (ConfigDict, extra="forbid" - halüsinasyon filtresi) ---
@@ -107,7 +106,9 @@ class InstagramGhostScraper:
                 try:
                     data = json.loads(match.group(1))
                     return data
-                except:
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to parse JSON in instagram_ghost: {e}")
                     continue
         
         # Eğer hiçbir pattern tutmadıysa, bu halüsinasyon değil, kanıt yok demektir
@@ -164,8 +165,9 @@ class InstagramGhostScraper:
                         caption=None,  # Caption ayrı parse edilecek, yoksa None - uydurma yok
                         is_video=False
                     ))
-                except Exception:
-                    # Tek post bozuksa hepsini çökertme, atla
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to parse post url: {e}")
                     continue
 
             # Eğer private ve post yoksa, sonraki ajanlar boş veriyle halüsinasyon göreceği için durdur
@@ -206,11 +208,30 @@ class InstagramGhostScraper:
 
         target_url = f"{self.base_url}/{username}/"
         
-        # Stealth navigation
-        await playwright_page.goto(target_url, wait_until="domcontentloaded")
-        self._random_delay()
+        import asyncio
+        import logging
         
-        html = await playwright_page.content()
+        html = ""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Stealth navigation
+                await playwright_page.goto(target_url, wait_until="domcontentloaded", timeout=15000)
+                self._random_delay()
+                html = await playwright_page.content()
+                break
+            except Exception as e:
+                err_str = str(e).lower()
+                is_transient = any(term in err_str for term in ["timeout", "net::", "reset", "disconnected", "closed", "failed"])
+                if not is_transient:
+                    logging.error(f"Playwright permanent error on attempt {attempt+1}: {e}")
+                    raise InsufficientEvidenceError(f"Scraper kalıcı hatası: {username} - {str(e)}") from e
+                
+                logging.warning(f"Playwright transient failure (attempt {attempt+1}/{max_retries}), Reason: {e}")
+                if attempt == max_retries - 1:
+                    logging.error(f"Playwright final failure after {max_retries} attempts.")
+                    raise InsufficientEvidenceError(f"Scraper network timeout/transient hatası: {username} - {str(e)}") from e
+                await asyncio.sleep(2)
 
         # Login duvarı mı?
         if "Login • Instagram" in html or 'name="username"' in html and 'name="password"' in html:

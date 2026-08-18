@@ -2,6 +2,10 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict
 from typing import Dict, Any, Tuple
 
+class ResonanceCalculationError(Exception):
+    """Fırlatılır: Rezonans hesaplaması matematiksel olarak imkansızsa (örn: boş vektörler)."""
+    pass
+
 class ResonanceProfile(BaseModel):
     compatibility_score: float  # 0-1
     frequency_match: Dict[str, float]
@@ -70,7 +74,9 @@ class ResonanceCalculator:
         magnitude2 = np.sqrt(sum(v**2 for v in vec2.values()))
         
         if magnitude1 == 0 or magnitude2 == 0:
-            return 0.0
+            import logging
+            logging.warning("Resonance calculation failed: Zero magnitude vector encountered.")
+            raise ResonanceCalculationError("Vektörlerden birinin magnitude'u SIFIR. Hesaplama yapılamaz.")
         
         return dot_product / (magnitude1 * magnitude2)
     

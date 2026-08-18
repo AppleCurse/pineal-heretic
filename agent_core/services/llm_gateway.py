@@ -11,8 +11,8 @@ from typing import Type, TypeVar, Any
 T = TypeVar('T', bound=BaseModel)
 
 class LLMGateway:
-    TIER_1_MODEL = "anthropic/claude-3.5-sonnet" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
-    TIER_2_MODEL = "meta-llama/llama-3-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
+    TIER_1_MODEL = "meta-llama/llama-3.3-70b-instruct" # Yüksek IQ (Karanlık Triad, Karşı-hamle)
+    TIER_2_MODEL = "meta-llama/llama-3.1-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
 
     LOCAL_DEFAULT_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/v1")
     LOCAL_DEFAULT_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen2.5-coder:latest")
@@ -62,6 +62,10 @@ class LLMGateway:
             target_client = self.local_client or AsyncOpenAI(base_url=self.local_base_url, api_key="ollama")
             selected_model = self.local_model if (not model or model == "local") else model
         else:
+            import os
+            if os.getenv("LIVE_LLM_E2E") != "1":
+                raise RuntimeError("REAL_LLM_CALL_NOT_EXECUTED: LIVE_LLM_E2E=1 flag is missing. External API calls are blocked.")
+            
             if not self.client:
                 raise RuntimeError("LLM anahtari yok. Vault veya .env ile OPENROUTER_API_KEY enjekte et veya Local LLM seç.")
             target_client = self.client
@@ -72,18 +76,40 @@ class LLMGateway:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        try:
-            r = await target_client.chat.completions.create(
-                model=selected_model, temperature=temperature,
-                messages=messages
-            )
-            self.failure_count = 0
-            return r.choices[0].message.content
-        except Exception as e:
-            self.failure_count += 1
-            if self.failure_count > 5:
-                self.circuit_open = True
-            raise
+        import asyncio
+        import logging
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                r = await target_client.chat.completions.create(
+                    model=selected_model, temperature=temperature,
+                    messages=messages,
+                    timeout=45.0
+                )
+                self.failure_count = 0
+                return r.choices[0].message.content
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = "429" in err_str or "rate" in err_str or "too many requests" in err_str
+                is_auth_error = "401" in err_str or "unauthorized" in err_str or "invalid_api_key" in err_str
+                
+                if is_auth_error:
+                    logging.error(f"LLM Gateway authentication error: {e}")
+                    raise RuntimeError(f"LLM API Key rejected: {e}") from e
+                    
+                self.failure_count += 1
+                if self.failure_count > 5:
+                    self.circuit_open = True
+                    
+                if is_rate_limit and attempt < max_retries - 1:
+                    backoff = 2 ** attempt
+                    logging.warning(f"LLM Rate limit (attempt {attempt+1}/{max_retries}), retrying in {backoff}s... {e}")
+                    await asyncio.sleep(backoff)
+                    continue
+                
+                # If not rate limited or out of retries, raise
+                raise
 
     def extract_json(self, text: str) -> dict:
         """Markdown fence ve etiketleri temizleyip JSON ayıklar."""

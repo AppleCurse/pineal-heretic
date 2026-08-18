@@ -166,8 +166,9 @@ class IntegratedStrategyEngine:
                         base_hook += " Bir daha denemeliyim..."
                     sense = self.sensory.detect_dominant_sense(str(psych.__dict__))
                     return self.sensory.craft_sensory_hook(base_hook, sense)
-            except Exception:
-                pass  # LLM hatasi: fallback dict'e dus
+            except Exception as e:
+                import logging
+                logging.warning(f"LLM query failed in _craft_first_hook: {e}. Falling back to static dictionary.")
 
         # Fallback: statik sozluk (LLM yoksa)
         hooks = {

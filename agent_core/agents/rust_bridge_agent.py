@@ -15,8 +15,19 @@ WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath
 if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
-from agent_core.task_executor import PinealExecutor
 from agent_core.services.llm_gateway import LLMGateway
+
+
+class RustBridgeAgent:
+    """Pineal-Heretic Rust Bridge Agent wrapper."""
+    def __init__(self, llm_gateway=None):
+        self.llm_gateway = llm_gateway
+
+    async def execute(self, input_data: Dict[str, Any], memory=None, llm_gateway=None) -> Dict[str, Any]:
+        target_url = input_data.get("target_url", "")
+        scraped_data = input_data.get("target_profile", {})
+        user_freq = input_data.get("user_context", {})
+        return run_full_pipeline(target_url, scraped_data, user_freq)
 
 
 def run_full_pipeline(
@@ -24,6 +35,7 @@ def run_full_pipeline(
     scraped_data: Dict[str, Any],
     user_freq: Dict[str, Any]
 ) -> Dict[str, Any]:
+    from agent_core.task_executor import PinealExecutor
     """
     Tam analiz pipeline'ını çalıştırır:
     1. Scraped veriyi yükle
@@ -89,13 +101,13 @@ def run_full_pipeline(
         
         # execute metodu ile analiz et (async)
         async def run_mirror():
-            # Mock memory ve llm_gateway
-            class MockMemory:
-                async def store(self, *args, **kwargs): pass
-            class MockLLM:
-                async def query(self, *args, **kwargs): return {"response": "ok"}
+            from agent_core.services.canonical_memory import CanonicalMemory
             
-            result = await mirror.execute(user_data, MockMemory(), MockLLM())
+            # Gerçek memory ve llm_gateway
+            memory = CanonicalMemory()
+            llm_gw = LLMGateway()
+            
+            result = await mirror.execute(user_data, memory, llm_gw)
             return result
         
         mirror_result = asyncio.run(run_mirror())

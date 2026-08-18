@@ -48,8 +48,9 @@ class ZeigarnikEngine:
                 ) if asyncio.get_event_loop().is_running() else ""
                 if loop.strip():
                     return f"{base_message} {loop.strip()}"
-            except Exception:
-                pass  # LLM hatasi: fallback'e dus
+            except Exception as e:
+                import logging
+                logging.warning(f"LLM query failed in inject_open_loop: {e}. Falling back to static templates.")
 
         loop = random.choice(self.OPEN_LOOP_PHRASES)
         return f"{base_message} {loop}"
@@ -71,8 +72,9 @@ class ZeigarnikEngine:
                 ) if asyncio.get_event_loop().is_running() else ""
                 if result.strip():
                     return result.strip() + " (Ama simdi degil...)"
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.warning(f"LLM query failed in create_cliffhanger: {e}. Falling back to static templates.")
 
         template = random.choice(self.CLIFFHANGER_TEMPLATES)
         fillers = {

@@ -57,9 +57,38 @@ app.state.rooms = {}  # client_id -> {"executor": PinealExecutor, "vault": {}, "
 def get_room(client_id: str) -> dict:
     if client_id not in app.state.rooms:
         executor = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
+        vault = {}
+        
+        # Otomatik Kasa (.pineal_vault.json / .env) yüklemesi
+        vault_file = ".pineal_vault.json"
+        if os.path.exists(vault_file):
+            try:
+                with open(vault_file, "r", encoding="utf-8") as f:
+                    vault = json.load(f)
+            except Exception:
+                pass
+
+        api_key = vault.get("api_key") or os.getenv("OPENROUTER_API_KEY")
+        if api_key and not api_key.startswith("sk-or-v1-YOUR"):
+            executor.llm_gateway.set_key(api_key)
+            if shadow_executor is not None:
+                shadow_executor.llm_gateway.set_key(api_key)
+            if dialogue_manager is not None:
+                dialogue_manager.llm.set_key(api_key)
+            vault["or_key"] = True
+            vault["api_key"] = api_key
+
+        tavily = vault.get("tavily_key") or os.getenv("TAVILY_API_KEY")
+        serpapi = vault.get("serpapi_key") or os.getenv("SERPAPI_KEY")
+        exa = vault.get("exa_key") or os.getenv("EXA_API_KEY")
+        if tavily or serpapi or exa:
+            executor.search_engine.set_keys(tavily=tavily, serpapi=serpapi, exa=exa)
+        use_local = vault.get("use_local", False)
+        executor.llm_gateway.use_local = use_local
+
         app.state.rooms[client_id] = {
             "executor": executor,
-            "vault": {},
+            "vault": vault,
             "websockets": set(),
             "logs": [],
             "aspasia": AspasiaChief(llm_gateway=executor.llm_gateway) if AspasiaChief else None
@@ -444,6 +473,35 @@ async def aspasia_intervene(req: IntervenePayload):
         return {"status": "halted", "message": "Operasyon durduruldu."}
 
     return {"status": "acknowledged", "message": "Müdahale emri alındı."}
+
+class InterpreterPayload(BaseModel):
+    client_id: str
+    prompt: str
+    auto_run: bool = True
+
+@app.post("/api/interpreter/execute")
+async def interpreter_execute(req: InterpreterPayload):
+    """Open Interpreter ile otonom kod icra eder"""
+    room = get_room(req.client_id)
+    executor = room.get("executor")
+    interpreter_agent = executor.agents.get("interpreter")
+    
+    if not interpreter_agent:
+        return {"error": "Interpreter Agent aktif değil"}
+        
+    await broadcast_log(req.client_id, "INFO", f"INTERPRETER: Görev icra ediliyor -> {req.prompt[:60]}...")
+    res = await interpreter_agent.execute_task(
+        prompt=req.prompt,
+        api_key=executor.llm_gateway.api_key,
+        auto_run=req.auto_run
+    )
+    
+    if res.status == "success":
+        await broadcast_log(req.client_id, "INFO", "INTERPRETER: İcra başarıyla tamamlandı.")
+    else:
+        await broadcast_log(req.client_id, "ERROR", f"INTERPRETER HATA: {res.error_message}")
+        
+    return res.model_dump()
 
 os.makedirs("frontend", exist_ok=True)
 # Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin

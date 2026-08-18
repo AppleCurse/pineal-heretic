@@ -131,12 +131,58 @@ class HumanBehaviorAnalyzer:
     
     def _temporal_forensics(self, post_times: List[str]) -> List[MicroSignal]:
         signals = []
-        # Dummy implementation
+        if not post_times:
+            return signals
+
+        late_night_count = 0
+        total_valid = 0
+
+        for t_str in post_times:
+            try:
+                parts = t_str.strip().split(':')
+                if len(parts) >= 1:
+                    hour = int(parts[0])
+                    total_valid += 1
+                    if hour >= 23 or hour <= 4:
+                        late_night_count += 1
+            except Exception:
+                continue
+
+        if total_valid > 0:
+            late_night_ratio = late_night_count / total_valid
+            if late_night_ratio > 0.3:
+                signals.append(MicroSignal(
+                    signal_type="insomnia_isolation",
+                    confidence=min(late_night_ratio, 1.0),
+                    location="temporal_post_distribution",
+                    evidence=f"Gece (23:00-04:00) paylaşım oranı: %{late_night_ratio*100:.1f}",
+                    psychological_weight=0.75
+                ))
+
         return signals
         
     def _mine_contradictions(self, visual_signals: List[MicroSignal], text_signals: Dict) -> List[Dict]:
         contradictions = []
-        # Dummy implementation
+        text_sig_list = text_signals.get('signals', [])
+
+        has_tension_or_void = any(s.signal_type in ("tension", "void") for s in visual_signals)
+        has_positive_claim = any(s.signal_type in ("authentic", "defense") for s in text_sig_list)
+
+        if has_tension_or_void and has_positive_claim:
+            contradictions.append({
+                "type": "visual_linguistic_mismatch",
+                "evidence": "Görsel gerginlik/bulanıklık sinyali ile metinsel savunma/pozitiflik iddiası çelişiyor",
+                "severity": 0.85
+            })
+
+        for ts in text_sig_list:
+            if ts.signal_type == "contradiction":
+                contradictions.append({
+                    "type": "linguistic_contradiction",
+                    "evidence": ts.evidence,
+                    "severity": ts.psychological_weight
+                })
+
         return contradictions
 
     def _extract_claimed_identity(self, bio: str) -> str:
