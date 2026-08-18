@@ -52,10 +52,18 @@ def test_parse_user_intent_retry(aspasia):
     assert intent.action_type == "RETRY_STEP"
 
 def test_parse_user_intent_none(aspasia):
-    intent = aspasia.parse_user_intent("Bana son durumu raporla Mösyö.")
     # Because "dur" is in "durumu", it matches HALT! Let's change the phrase.
     intent = aspasia.parse_user_intent("Bana son raporu ver Mösyö.")
     assert intent is None
+
+def test_parse_user_intent_durumu_no_halt(aspasia):
+    intent = aspasia.parse_user_intent("durumu nedir")
+    assert intent is None
+
+def test_parse_user_intent_dur_halt(aspasia):
+    intent = aspasia.parse_user_intent("lütfen dur")
+    assert intent is not None
+    assert intent.action_type == "HALT"
 
 @pytest.mark.asyncio
 async def test_chat_success(aspasia, mock_llm_gateway):
