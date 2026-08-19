@@ -11,6 +11,8 @@ WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath
 if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
+from agent_core.task_executor import PinealExecutor  # noqa: E402
+
 
 class RustBridgeAgent:
     def __init__(self, llm_gateway=None):
@@ -39,8 +41,6 @@ def _find_agent_result(task_status, agent_name: str) -> Dict[str, Any]:
 
 
 def run_full_pipeline(target_url: str, scraped_data: Dict[str, Any], user_freq: Dict[str, Any]) -> Dict[str, Any]:
-    from agent_core.task_executor import PinealExecutor
-
     print(f"[RUST_BRIDGE] Pipeline başlatılıyor: {target_url}", file=sys.stderr)
     executor = PinealExecutor()
     user_profile = _user_profile(user_freq)
