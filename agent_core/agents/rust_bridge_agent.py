@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
-"""
-Rust Bridge Agent - Pineal-Heretic v5.0
-Rust backend'den çağrılarak tam analiz pipeline'ını çalıştırır.
-Scraped veri + User Frequency → Autonomous Verification + Mirror Truth → Final Report
-"""
+"""Rust bridge for the real PinealExecutor pipeline."""
 
-import sys
+import asyncio
 import json
 import os
-from typing import Dict, Any, Optional
+import sys
+from typing import Dict, Any
 
-# Workspace root'u path'e ekle
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
-from agent_core.services.llm_gateway import LLMGateway
-
 
 class RustBridgeAgent:
-    """Pineal-Heretic Rust Bridge Agent wrapper."""
     def __init__(self, llm_gateway=None):
         self.llm_gateway = llm_gateway
 
@@ -30,154 +23,96 @@ class RustBridgeAgent:
         return run_full_pipeline(target_url, scraped_data, user_freq)
 
 
-def run_full_pipeline(
-    target_url: str,
-    scraped_data: Dict[str, Any],
-    user_freq: Dict[str, Any]
-) -> Dict[str, Any]:
-    from agent_core.task_executor import PinealExecutor
-    """
-    Tam analiz pipeline'ını çalıştırır:
-    1. Scraped veriyi yükle
-    2. Autonomous Verification (Tavily + LLM)
-    3. Mirror Truth Analysis (User frequency ile)
-    4. Final report oluştur
-    
-    Args:
-        target_url: Hedef profil URL'i
-        scraped_data: Scraper'dan gelen ham veri
-        user_freq: Kullanıcı frekans parametreleri (rituals, playlist, envies)
-    
-    Returns:
-        Final analiz raporu (JSON serializable)
-    """
-    print(f"[RUST_BRIDGE] Pipeline başlatılıyor: {target_url}", file=sys.stderr)
-    
-    # PinealExecutor başlat (llm_gateway parametresi yok)
-    executor = PinealExecutor()
-    
-    # 1. Adım: Scraped veriyi input_data olarak hazırla
-    print(f"[RUST_BRIDGE] Scraped veri hazırlanıyor...", file=sys.stderr)
-    input_data = {
-        "target_profile": scraped_data,
-        "user_context": user_freq
+def _user_profile(user_freq: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "private_rituals": user_freq.get("rituals", []),
+        "late_night_playlist": user_freq.get("playlist", []),
+        "secret_envies": user_freq.get("envies", []),
     }
-    
-    # 2. Adım: Autonomous Verification çalıştır
-    print(f"[RUST_BRIDGE] Autonomous Verification çalıştırılıyor...", file=sys.stderr)
-    try:
-        # execute_task ile tüm pipeline'ı çalıştır
-        import asyncio
-        task_status = asyncio.run(executor.execute_task(input_data, "rust_bridge_task"))
-        
+
+
+def _find_agent_result(task_status, agent_name: str) -> Dict[str, Any]:
+    for entry in task_status.evidence_chain:
+        if entry.get("agent") == agent_name:
+            return entry.get("result", {})
+    return {}
+
+
+def run_full_pipeline(target_url: str, scraped_data: Dict[str, Any], user_freq: Dict[str, Any]) -> Dict[str, Any]:
+    from agent_core.task_executor import PinealExecutor
+
+    print(f"[RUST_BRIDGE] Pipeline başlatılıyor: {target_url}", file=sys.stderr)
+    executor = PinealExecutor()
+    user_profile = _user_profile(user_freq)
+    input_data = {
+        "target_url": target_url,
+        "target_profile": scraped_data,
+        "user_profile": user_profile,
+    }
+
+    print("[RUST_BRIDGE] PinealExecutor gerçek pipeline çalıştırılıyor...", file=sys.stderr)
+    task_status = asyncio.run(executor.execute_task(input_data, "rust_bridge_task"))
+
+    verification_result = _find_agent_result(task_status, "autonomous_verifier")
+    if not verification_result:
         verification_result = {
             "verifications": [],
-            "overall_authenticity_score": 0.5,
-            "status": task_status.status
+            "overall_authenticity_score": 0.0,
+            "status": "UNVERIFIED",
         }
-        print(f"[RUST_BRIDGE] Verification tamamlandı: {task_status.status}", file=sys.stderr)
-    except Exception as e:
-        print(f"[RUST_BRIDGE] Verification hatası: {e}", file=sys.stderr)
-        verification_result = {
-            "error": str(e),
-            "verifications": [],
-            "overall_authenticity_score": 0.0
-        }
-    
-    # 3. Adım: Mirror Truth Analysis - doğrudan MirrorOfTruth kullan
-    print(f"[RUST_BRIDGE] Mirror Truth Analysis çalıştırılıyor...", file=sys.stderr)
-    try:
-        from agent_core.agents.mirror_truth import MirrorOfTruth
-        import asyncio
-        
-        mirror = MirrorOfTruth()
-        
-        # User data hazırla
-        user_data = {
-            "rituals": user_freq.get('rituals', []),
-            "playlist": user_freq.get('playlist', []),
-            "envies": user_freq.get('envies', [])
-        }
-        
-        # execute metodu ile analiz et (async)
-        async def run_mirror():
-            from agent_core.services.canonical_memory import CanonicalMemory
-            
-            # Gerçek memory ve llm_gateway
-            memory = CanonicalMemory()
-            llm_gw = LLMGateway()
-            
-            result = await mirror.execute(user_data, memory, llm_gw)
-            return result
-        
-        mirror_result = asyncio.run(run_mirror())
-        
-        # Pydantic model'i dict'e çevir
-        if hasattr(mirror_result, 'dict'):
-            mirror_result = mirror_result.dict()
-        
-        print(f"[RUST_BRIDGE] Mirror Analysis tamamlandı", file=sys.stderr)
-    except Exception as e:
-        print(f"[RUST_BRIDGE] Mirror Analysis hatası: {e}", file=sys.stderr)
+
+    print(f"[RUST_BRIDGE] Verification status: {verification_result.get('status', 'UNKNOWN')}", file=sys.stderr)
+
+    mirror_result = _find_agent_result(task_status, "mirror_truth")
+    if not mirror_result:
         mirror_result = {
-            "error": str(e),
             "user_core_frequency": "unknown",
             "surface_persona": "unknown",
             "authentic_anchors": [],
-            "alignment_score": 0.0
+            "alignment_score": 0.0,
         }
-    
-    # 4. Final report oluştur
-    final_report = {
+
+    final_status = task_status.status
+    verification_score = float(verification_result.get("overall_authenticity_score", 0.0))
+    alignment_score = float(mirror_result.get("alignment_score", 0.0))
+
+    return {
         "target_url": target_url,
         "verification": verification_result,
         "mirror_analysis": mirror_result,
-        "alignment_score": mirror_result.get('alignment_score', 0.0),
-        "overall_authenticity_score": verification_result.get('overall_authenticity_score', 0.0),
-        "combined_score": (
-            mirror_result.get('alignment_score', 0.0) * 0.4 +
-            verification_result.get('overall_authenticity_score', 0.0) * 0.6
-        ),
-        "status": "completed"
+        "alignment_score": alignment_score,
+        "overall_authenticity_score": verification_score,
+        "combined_score": alignment_score * 0.4 + verification_score * 0.6,
+        "status": final_status,
     }
-    
-    print(f"[RUST_BRIDGE] Pipeline tamamlandı. Combined score: {final_report['combined_score']}", file=sys.stderr)
-    return final_report
 
 
-def main():
-    """CLI entry point - Rust subprocess'ten çağrılır."""
+def main() -> None:
+    """CLI: JSON payload is accepted on stdin; no user value is interpolated into Python source."""
+    if len(sys.argv) == 2 and sys.argv[1] == "--stdin":
+        try:
+            payload = json.load(sys.stdin)
+            result = run_full_pipeline(
+                payload.get("target_url", ""),
+                payload.get("target_profile", {}),
+                payload.get("user_context", {}),
+            )
+            print(json.dumps(result, ensure_ascii=False))
+            sys.exit(0 if result.get("status") in {"completed", "halted_frequency", "halted_evidence"} else 1)
+        except Exception as e:
+            print(json.dumps({"status": "failed", "error": str(e)}, ensure_ascii=False))
+            sys.exit(1)
+
     if len(sys.argv) < 4:
-        error_response = {
-            "error": "Usage: rust_bridge_agent.py <target_url> <scraped_json> <user_freq_json>",
-            "status": "failed"
-        }
-        print(json.dumps(error_response))
+        print(json.dumps({"error": "Usage: rust_bridge_agent.py --stdin", "status": "failed"}))
         sys.exit(1)
-    
-    target_url = sys.argv[1]
-    
+
     try:
-        scraped_data = json.loads(sys.argv[2])
-    except json.JSONDecodeError as e:
-        error_response = {"error": f"Invalid scraped JSON: {e}", "status": "failed"}
-        print(json.dumps(error_response))
-        sys.exit(1)
-    
-    try:
-        user_freq = json.loads(sys.argv[3])
-    except json.JSONDecodeError as e:
-        error_response = {"error": f"Invalid user_freq JSON: {e}", "status": "failed"}
-        print(json.dumps(error_response))
-        sys.exit(1)
-    
-    try:
-        final_report = run_full_pipeline(target_url, scraped_data, user_freq)
-        print(json.dumps(final_report, ensure_ascii=False, indent=2))
-        sys.exit(0)
+        result = run_full_pipeline(sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3]))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        sys.exit(0 if result.get("status") in {"completed", "halted_frequency", "halted_evidence"} else 1)
     except Exception as e:
-        error_response = {"error": f"Pipeline failed: {e}", "status": "failed"}
-        print(json.dumps(error_response))
+        print(json.dumps({"error": f"Pipeline failed: {e}", "status": "failed"}, ensure_ascii=False))
         sys.exit(1)
 
 
