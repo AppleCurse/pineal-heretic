@@ -1,4 +1,4 @@
-import asyncio, os, tempfile, traceback
+import asyncio, os, tempfile
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
@@ -15,6 +15,7 @@ try:
     from agent_core.services.memory_injector import MemoryInjector
     from agent_core.services.search_engine import SearchEngine
     from agent_core.agents.autonomous_verifier import AutonomousVerifier
+    from agent_core.agents.interpreter_agent import InterpreterAgent
 except Exception:
     from services.cognitive_router import CognitiveRouter, RoutePlan
     from services.canonical_memory import CanonicalMemory
@@ -27,6 +28,7 @@ except Exception:
     from services.memory_injector import MemoryInjector
     from services.search_engine import SearchEngine
     from agents.autonomous_verifier import AutonomousVerifier
+    from agents.interpreter_agent import InterpreterAgent
 
 class InsufficientEvidenceError(RuntimeError):
     pass
@@ -57,6 +59,7 @@ class PinealExecutor:
             "resonance_calc": ResonanceCalculator(),
             "pattern_interrupt": PatternInterrupt(),
             "autonomous_verifier": AutonomousVerifier(self.search_engine),
+            "interpreter": InterpreterAgent(self.llm_gateway),
         }
 
     async def _download_images(self, urls: List[str]) -> List[str]:
@@ -108,7 +111,6 @@ class PinealExecutor:
         status = TaskStatus(task_id=task_id, status="pending", created_at=datetime.now(timezone.utc))
         status.status = "processing"
 
-        # Kutsal Kuralları (Hafıza) Enjekte Et
         sacred_rules = self.injector.fetch_active_rules()
         input_data["sacred_rules"] = sacred_rules
 
@@ -136,17 +138,19 @@ class PinealExecutor:
                 except InsufficientEvidenceError:
                     raise
                 except Exception as e:
-                    self._log("WARNING", f"[{task_id}] AGENT {agent_name} BASTARISIZ OLDU: {str(e)[:100]}. Zincir (Pipeline) devam ediyor...")
-                    continue  # Fallback: Ajan çöktüyse zinciri kırma, sonrakine geç
+                    status.status = "failed"
+                    status.completed_at = datetime.now(timezone.utc)
+                    self._log("ERROR", f"[{task_id}] AGENT {agent_name} BASTARISIZ: {type(e).__name__}: {str(e)[:200]}")
+                    self._log("ERROR", f"[{task_id}] PIPELINE FAILED; silent continuation disabled")
+                    await self.memory.merge_evidence(task_id, status.evidence_chain)
+                    return status
 
                 check = self.uncertainty.evaluate(result, agent_name)
-                
-                # Dinamik Karar Ağacı: Eğer güven çok düşükse direkt kes (Router devreye girer)
                 if check.confidence < 0.6:
                     halt_reason = f"Düşük güven ({check.confidence}). Router zinciri kesti."
                     self._log("ERROR", f"[{task_id}] COGNITIVE ROUTER: {halt_reason}")
                     raise InsufficientEvidenceError(halt_reason)
-                    
+
                 if check.is_suspicious:
                     self._log("ERROR", "[" + task_id + "] UNCERTAINTY: " + check.reason)
                     try:
@@ -172,7 +176,14 @@ class PinealExecutor:
             for agent_name in deferred:
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
-                result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
+                try:
+                    result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
+                except Exception as e:
+                    status.status = "failed"
+                    status.completed_at = datetime.now(timezone.utc)
+                    self._log("ERROR", f"[{task_id}] AGENT {agent_name} BASTARISIZ: {type(e).__name__}: {str(e)[:200]}")
+                    await self.memory.merge_evidence(task_id, status.evidence_chain)
+                    return status
                 status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
                 self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
 
@@ -184,13 +195,14 @@ class PinealExecutor:
         except InsufficientEvidenceError as e:
             self._log("ERROR", "[" + task_id + "] KANIT KILIDI: " + str(e))
             status.status = "halted_evidence"
+            status.completed_at = datetime.now(timezone.utc)
             await self.memory.merge_evidence(task_id, status.evidence_chain)
         return status
 
     def _calculate_authentic_vector(self, data_dict: dict) -> dict:
         import re
         import numpy as np
-        
+
         text = ""
         def extract_text(d):
             nonlocal text
@@ -200,13 +212,13 @@ class PinealExecutor:
                 for item in d: extract_text(item)
             elif isinstance(d, str):
                 text += " " + d
-                
+
         extract_text(data_dict)
         text = text.strip()
-        
+
         if not text:
             return {"depth": 0.5, "energy": 0.5}
-            
+
         words = re.findall(r'\b\w+\b', text.lower())
         unique_words = set(words)
         ttr = len(unique_words) / len(words) if words else 0
@@ -215,14 +227,14 @@ class PinealExecutor:
         avg_sentence_len = len(words) / max(1, len(sentences))
         depth_val = (ttr * 0.6) + (min(avg_sentence_len, 20) / 20 * 0.4)
         depth = float(np.clip(depth_val, 0.1, 1.0))
-        
+
         exclamations = text.count('!')
         caps = sum(1 for c in text if c.isupper())
         total_chars = max(1, len(text))
         caps_ratio = caps / total_chars
         energy_val = (exclamations * 0.1) + (caps_ratio * 2.0)
         energy = float(np.clip(energy_val, 0.1, 1.0))
-        
+
         return {"depth": round(depth, 3), "energy": round(energy, 3)}
 
 executor = PinealExecutor()

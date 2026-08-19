@@ -1,8 +1,10 @@
 use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
-use serde_json::Value;
+use serde_json::{json, Value};
 use crate::event_bus::{EventBus, AgentEvent, Severity};
 
 #[derive(Debug, Clone)]
@@ -21,7 +23,6 @@ pub struct TaskManager {
 
 impl TaskManager {
     pub fn new(event_bus: Arc<EventBus>) -> Self {
-        // Proje kökünü bul (cargo manifest'den)
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
             .unwrap_or_else(|_| "/workspace/rust_core".to_string());
         let project_root = std::path::Path::new(&manifest_dir)
@@ -40,10 +41,7 @@ impl TaskManager {
 
     pub fn create_task(&self) -> Uuid {
         let task_id = Uuid::new_v4();
-        let ctx = TaskContext {
-            task_id,
-            state: HashMap::new(),
-        };
+        let ctx = TaskContext { task_id, state: HashMap::new() };
         self.tasks.lock().unwrap().insert(task_id, ctx);
         task_id
     }
@@ -52,9 +50,6 @@ impl TaskManager {
         self.tasks.lock().unwrap().get(task_id).cloned()
     }
 
-    /// Tam ajan hattı: Scraper + rust_bridge_agent (PinealExecutor zinciri)
-    /// target_url, user_rituals, user_playlist, user_envies parametrelerini alıp
-    /// agent_core/agents/rust_bridge_agent.py üzerinden işler
     pub async fn execute_isolated_task(
         &self,
         target_url: String,
@@ -63,96 +58,101 @@ impl TaskManager {
         user_envies: Vec<String>,
     ) -> Result<String, String> {
         let task_id = self.create_task();
+        let started = Instant::now();
 
         let _ = self.event_bus.publish(AgentEvent::TaskStarted {
             task_id,
             agent_name: "TaskManager(rust_bridge_agent)".to_string(),
             input_summary: format!(
-                "X profili kazınıyor: {}, ritüeller: {}, playlist: {}, envies: {}",
-                target_url,
-                user_rituals.join(", "),
-                user_playlist.join(", "),
-                user_envies.join(", ")
+                "X profili kaziniyor: {}, ritualer: {}, playlist: {}, envies: {}",
+                target_url, user_rituals.join(", "), user_playlist.join(", "), user_envies.join(", ")
             ),
         });
 
-        // Proje kökünü bul
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
             .unwrap_or_else(|_| "/workspace/rust_core".to_string());
         let project_root = std::path::Path::new(&manifest_dir)
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "/workspace".to_string());
-        let bridge_agent_path = format!("{}/agent_core/agents/rust_bridge_agent.py", project_root);
 
-        // Önce scraper.py ile veriyi çek, sonra rust_bridge_agent.py ile tam pipeline çalıştır
-        let python_script = format!(
-            r#"
-import sys
-import json
-sys.path.insert(0, r'{}')
+        let scraper_payload = json!({
+            "target_url": target_url,
+            "cookies": null
+        });
 
-# 1. Adim: Scraper ile profil verisini cek
-from scraper import scrape_readonly
+        let mut scraper = Command::new(&self.python_path);
+        scraper
+            .current_dir(&project_root)
+            .arg(&self.scraper_path)
+            .arg("--stdin")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
 
-try:
-    profile_data = scrape_readonly('{}')
-    
-    if not profile_data or 'error' in profile_data:
-        print(json.dumps({{"status": "error", "message": "Scraper başarısız", "data": profile_data}}))
-        sys.exit(0)
-    
-    # 2. Adım: Kullanıcı frekans parametrelerini hazırla
-    user_freq = {{
-        "rituals": {},
-        "playlist": {},
-        "envies": {}
-    }}
-    
-    # 3. Adım: rust_bridge_agent.py ile tam analiz pipeline'ını çalıştır
-    sys.argv = ['rust_bridge_agent.py', '{}', json.dumps(profile_data), json.dumps(user_freq)]
-    
-    # Import ve çalıştır
-    from agent_core.agents.rust_bridge_agent import run_full_pipeline
-    final_report = run_full_pipeline('{}', profile_data, user_freq)
-    
-    # 4. Adım: Sonucu JSON olarak döndür
-    output = {{
-        "status": "success",
-        "data": final_report
-    }}
-    print(json.dumps(output))
-    
-except Exception as e:
-    import traceback
-    error_detail = traceback.format_exc()
-    print(json.dumps({{
-        "status": "error",
-        "message": str(e),
-        "traceback": error_detail
-    }}))
-"#,
-            project_root,
-            target_url,
-            serde_json::to_string(&user_rituals).unwrap_or("[]".to_string()),
-            serde_json::to_string(&user_playlist).unwrap_or("[]".to_string()),
-            serde_json::to_string(&user_envies).unwrap_or("[]".to_string()),
-            target_url,
-            target_url
-        );
-
-        let output = Command::new(&self.python_path)
-            .arg("-c")
-            .arg(python_script)
-            .output()
+        let mut scraper_child = scraper
+            .spawn()
+            .map_err(|e| format!("Scraper süreci başlatılamadı: {}", e))?;
+        if let Some(mut stdin) = scraper_child.stdin.take() {
+            let payload = serde_json::to_vec(&scraper_payload).map_err(|e| format!("Scraper JSON oluşturulamadı: {}", e))?;
+            stdin.write_all(&payload).await.map_err(|e| format!("Scraper stdin yazılamadı: {}", e))?;
+        }
+        let scraper_output = scraper_child
+            .wait_with_output()
             .await
-            .map_err(|e| format!("Python süreci başlatılamadı: {}", e))?;
+            .map_err(|e| format!("Scraper süreci okunamadı: {}", e))?;
 
+        if !scraper_output.status.success() {
+            let stderr = String::from_utf8_lossy(&scraper_output.stderr);
+            let _ = self.event_bus.publish(AgentEvent::ErrorHalt {
+                task_id,
+                agent_name: "TaskManager(scraper)".to_string(),
+                error_code: "SCRAPER_FAILED".to_string(),
+                error_message: stderr.to_string(),
+                severity: Severity::Critical,
+            });
+            return Err(format!("Scraper hatası: {}", stderr));
+        }
+
+        let profile_data: Value = serde_json::from_slice(&scraper_output.stdout)
+            .map_err(|e| format!("Scraper JSON parse hatası: {}", e))?;
+
+        let bridge_payload = json!({
+            "target_url": target_url,
+            "target_profile": profile_data,
+            "user_context": {
+                "rituals": user_rituals,
+                "playlist": user_playlist,
+                "envies": user_envies
+            }
+        });
+
+        let mut bridge = Command::new(&self.python_path);
+        bridge
+            .current_dir(&project_root)
+            .arg("-m")
+            .arg("agent_core.agents.rust_bridge_agent")
+            .arg("--stdin")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let mut bridge_child = bridge
+            .spawn()
+            .map_err(|e| format!("Rust bridge süreci başlatılamadı: {}", e))?;
+        if let Some(mut stdin) = bridge_child.stdin.take() {
+            let payload = serde_json::to_vec(&bridge_payload).map_err(|e| format!("Bridge JSON oluşturulamadı: {}", e))?;
+            stdin.write_all(&payload).await.map_err(|e| format!("Bridge stdin yazılamadı: {}", e))?;
+        }
+
+        let output = bridge_child
+            .wait_with_output()
+            .await
+            .map_err(|e| format!("Python bridge süreci okunamadı: {}", e))?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        // Hata durumunda EventBus'a bildir
-        if !output.status.success() || stderr.contains("Error") || stderr.contains("Exception") {
+        if !output.status.success() {
             let _ = self.event_bus.publish(AgentEvent::ErrorHalt {
                 task_id,
                 agent_name: "TaskManager(PinealExecutor)".to_string(),
@@ -163,47 +163,36 @@ except Exception as e:
             return Err(format!("Executor hatası: {}", stderr));
         }
 
-        // JSON çıktıyı parse et
         let json_result: Value = serde_json::from_str(&stdout)
             .map_err(|e| format!("JSON parse hatası: {}, çıktı: {}", e, stdout))?;
 
-        // Error kontrolü
-        if let Some(status) = json_result.get("status") {
-            if status.as_str() == Some("error") {
-                let error_msg = json_result
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Bilinmeyen hata");
-                let _ = self.event_bus.publish(AgentEvent::ErrorHalt {
-                    task_id,
-                    agent_name: "TaskManager(PinealExecutor)".to_string(),
-                    error_code: "EXECUTOR_ERROR".to_string(),
-                    error_message: error_msg.to_string(),
-                    severity: Severity::High,
-                });
-                return Err(format!("Executor hatası: {}", error_msg));
-            }
+        let status = json_result.get("status").and_then(|v| v.as_str()).unwrap_or("failed");
+        if status == "failed" {
+            let error_msg = json_result.get("error").and_then(|v| v.as_str()).unwrap_or("Bilinmeyen hata");
+            let _ = self.event_bus.publish(AgentEvent::ErrorHalt {
+                task_id,
+                agent_name: "TaskManager(PinealExecutor)".to_string(),
+                error_code: "EXECUTOR_ERROR".to_string(),
+                error_message: error_msg.to_string(),
+                severity: Severity::High,
+            });
+            return Err(format!("Executor hatası: {}", error_msg));
         }
 
-        // Başarılı sonuç - EventBus'a telemetry gönder
-        let data = json_result.get("data").unwrap_or(&json_result);
-        
-        // Frekans verilerini çıkar ve FrequencyUpdate event'i yayınla
+        let data = &json_result;
         if let Some(analysis) = data.get("mirror_analysis") {
-            let ritual_score = analysis.get("ritual_match_score").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let playlist_score = analysis.get("playlist_resonance").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let envy_score = analysis.get("envy_intensity").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-            let overall_freq = analysis.get("user_core_frequency").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-            
+            let alignment_score = analysis.get("alignment_score").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let anchor_count = analysis.get("authentic_anchors").and_then(|v| v.as_array()).map(|v| v.len() as u32).unwrap_or(0);
+            let overall_frequency = analysis.get("user_core_frequency").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+
             let _ = self.event_bus.publish(AgentEvent::FrequencyUpdate {
                 task_id,
-                ritual_match_score: ritual_score,
-                playlist_resonance: playlist_score,
-                envy_intensity: envy_score,
-                overall_frequency: overall_freq,
+                alignment_score,
+                authentic_anchor_count: anchor_count,
+                overall_frequency,
             });
         }
-        
+
         let _ = self.event_bus.publish(AgentEvent::StepCompleted {
             task_id,
             agent_name: "TaskManager(rust_bridge_agent)".to_string(),
@@ -211,11 +200,12 @@ except Exception as e:
             output_hash: format!("{:x}", md5::compute(data.to_string())),
         });
 
+        let duration_ms = started.elapsed().as_millis() as u64;
         let _ = self.event_bus.publish(AgentEvent::TaskCompleted {
             task_id,
             agent_name: "TaskManager(rust_bridge_agent)".to_string(),
             final_result_hash: format!("{:x}", md5::compute(stdout.to_string())),
-            duration_ms: 150,
+            duration_ms,
         });
 
         Ok(stdout.to_string())

@@ -1,32 +1,23 @@
-//! PINEAL-HERETIC v4.0 - Event Bus
-//! 
-//! Merkezi olay hattı - tüm ajanların telemetrisini standart formatta toplar.
-//! Kontrolsüz veri fırlatmayı engeller, her adımı loglar.
+//! PINEAL-HERETIC - Event Bus
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-/// Olay türleri - tüm ajanlar bu enum'u kullanmak ZORUNDA
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AgentEvent {
-    /// Ajan başladı
     TaskStarted {
         task_id: Uuid,
         agent_name: String,
         input_summary: String,
     },
-    
-    /// Başarılı adım
     StepCompleted {
         task_id: Uuid,
         agent_name: String,
         step_name: String,
-        output_hash: String, // Büyük veriyi hash'le logla
+        output_hash: String,
     },
-    
-    /// Hata durumu (Fail-Fast)
     ErrorHalt {
         task_id: Uuid,
         agent_name: String,
@@ -34,29 +25,23 @@ pub enum AgentEvent {
         error_message: String,
         severity: Severity,
     },
-    
-    /// Bekleme durumu (insan onayı gerekli)
     AwaitingHuman {
         task_id: Uuid,
         agent_name: String,
         reason: String,
         options: Vec<String>,
     },
-    
-    /// Görev tamamlandı
     TaskCompleted {
         task_id: Uuid,
         agent_name: String,
         final_result_hash: String,
         duration_ms: u64,
     },
-    
-    /// Frekans güncellemesi (user rituals/playlist/envies analizi)
+    /// Contract mirrors agent_core.agents.mirror_truth.MirrorReflection.
     FrequencyUpdate {
         task_id: Uuid,
-        ritual_match_score: f32,
-        playlist_resonance: f32,
-        envy_intensity: f32,
+        alignment_score: f32,
+        authentic_anchor_count: u32,
         overall_frequency: String,
     },
 }
@@ -69,15 +54,13 @@ pub enum Severity {
     Critical,
 }
 
-/// Standart event wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TelemetryEvent {
     pub timestamp: DateTime<Utc>,
     pub event: AgentEvent,
-    pub correlation_id: Option<Uuid>, // İlişkili olayları bağlar
+    pub correlation_id: Option<Uuid>,
 }
 
-/// Event Bus - merkezi dağıtıcı
 pub struct EventBus {
     sender: broadcast::Sender<TelemetryEvent>,
     _receiver_count: usize,
@@ -86,47 +69,34 @@ pub struct EventBus {
 impl EventBus {
     pub fn new(buffer_size: usize) -> Self {
         let (sender, _) = broadcast::channel(buffer_size);
-        Self {
-            sender,
-            _receiver_count: 0,
-        }
+        Self { sender, _receiver_count: 0 }
     }
 
-    /// Event yayınla
     pub fn publish(&self, event: AgentEvent) -> Result<(), broadcast::error::SendError<TelemetryEvent>> {
-        let telemetry = TelemetryEvent {
-            timestamp: Utc::now(),
-            event,
-            correlation_id: None,
-        };
-        
+        let telemetry = TelemetryEvent { timestamp: Utc::now(), event, correlation_id: None };
         self.sender.send(telemetry)?;
         Ok(())
     }
 
-    /// Yeni subscriber ekle (Kokpit, Chief, Logger vb.)
     pub fn subscribe(&self) -> broadcast::Receiver<TelemetryEvent> {
         self.sender.subscribe()
     }
 
-    /// Event'i correlation_id ile bağla
     pub fn publish_with_correlation(
         &self,
         event: AgentEvent,
         correlation_id: Uuid,
     ) -> Result<(), broadcast::error::SendError<TelemetryEvent>> {
-        let mut telemetry = TelemetryEvent {
+        let telemetry = TelemetryEvent {
             timestamp: Utc::now(),
             event,
             correlation_id: Some(correlation_id),
         };
-        
         self.sender.send(telemetry)?;
         Ok(())
     }
 }
 
-/// Event Bus Builder - konfigürasyon için
 pub struct EventBusBuilder {
     buffer_size: usize,
     log_to_file: bool,
@@ -135,65 +105,39 @@ pub struct EventBusBuilder {
 
 impl Default for EventBusBuilder {
     fn default() -> Self {
-        Self {
-            buffer_size: 1000,
-            log_to_file: false,
-            log_path: None,
-        }
+        Self { buffer_size: 1000, log_to_file: false, log_path: None }
     }
 }
 
 impl EventBusBuilder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn with_buffer_size(mut self, size: usize) -> Self {
-        self.buffer_size = size;
-        self
-    }
-
+    pub fn new() -> Self { Self::default() }
+    pub fn with_buffer_size(mut self, size: usize) -> Self { self.buffer_size = size; self }
     pub fn with_file_logging(mut self, path: &str) -> Self {
         self.log_to_file = true;
         self.log_path = Some(path.to_string());
         self
     }
-
-    pub fn build(self) -> EventBus {
-        // TODO: File logger entegrasyonu
-        EventBus::new(self.buffer_size)
-    }
+    pub fn build(self) -> EventBus { EventBus::new(self.buffer_size) }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_event_bus_publish_subscribe() {
         let bus = EventBus::new(100);
         let mut rx = bus.subscribe();
-
-        // Event yayınla
-        let event = AgentEvent::TaskStarted {
-            task_id: Uuid::new_v4(),
+        let task_id = Uuid::new_v4();
+        bus.publish(AgentEvent::TaskStarted {
+            task_id,
             agent_name: "MirrorOfTruth".to_string(),
             input_summary: "Hedef profil analizi başlatıldı".to_string(),
-        };
-
-        bus.publish(event).unwrap();
-
-        // Subscriber'a düşmeli
-        let received = tokio::time::timeout(Duration::from_millis(100), rx.recv())
-            .await
-            .expect("Timeout")
-            .expect("Channel kapandı");
-
+        }).unwrap();
+        let received = tokio::time::timeout(Duration::from_millis(100), rx.recv()).await.expect("Timeout").expect("Channel kapandı");
         match received.event {
-            AgentEvent::TaskStarted { agent_name, .. } => {
-                assert_eq!(agent_name, "MirrorOfTruth");
-            },
+            AgentEvent::TaskStarted { agent_name, .. } => assert_eq!(agent_name, "MirrorOfTruth"),
             _ => panic!("Yanlış event tipi"),
         }
     }
@@ -203,20 +147,14 @@ mod tests {
         let bus = EventBus::new(100);
         let mut rx1 = bus.subscribe();
         let mut rx2 = bus.subscribe();
-
-        let event = AgentEvent::StepCompleted {
+        bus.publish(AgentEvent::StepCompleted {
             task_id: Uuid::new_v4(),
             agent_name: "ShadowExecutor".to_string(),
             step_name: "JSON_Generation".to_string(),
             output_hash: "abc123".to_string(),
-        };
-
-        bus.publish(event).unwrap();
-
-        // Her iki subscriber da almalı
+        }).unwrap();
         let r1 = rx1.recv().await.unwrap();
         let r2 = rx2.recv().await.unwrap();
-
         assert_eq!(r1.timestamp, r2.timestamp);
     }
 }

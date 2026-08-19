@@ -1,6 +1,10 @@
 import json
+import logging
+import sys
 import time
 from playwright.sync_api import sync_playwright
+
+logger = logging.getLogger(__name__)
 
 class RateLimitError(Exception):
     pass
@@ -10,10 +14,6 @@ class TargetPrivateError(Exception):
 
 
 def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
-    """
-    Network Interception (GraphQL) tabanlı Anti-Kırılgan Scraper.
-    DOM Selector yerine X'in kendi API trafiğini dinler.
-    """
     scraped_data = {
         "username": "@" + profile_url.split("?")[0].rstrip("/").split("/")[-1],
         "bio": "",
@@ -26,75 +26,59 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
         try:
             if "graphql" not in response.url:
                 return
-            
-            # CORS Preflight vb. geç
             if response.request.method == "OPTIONS":
                 return
-                
+
             if response.status == 429:
-                raise RateLimitError("X (Twitter) Rate Limit'e (429) takildik. Cok fazla istek atildi.")
+                raise RateLimitError("X (Twitter) Rate Limit'e (429) takildik.")
             if response.status == 403:
                 raise RateLimitError("X (Twitter) Erisim Reddedildi (403). Cookie suresi dolmus olabilir.")
 
-            # JSON yanıtını al
             try:
                 resp_json = response.json()
-            except:
-                return
-            
-            # 1. Biyografi Yakalama (UserByScreenName)
+            except Exception as exc:
+                logger.error("GraphQL JSON parse failed for %s: %s", response.url, exc)
+                raise
+
             if "UserByScreenName" in response.url:
                 legacy = resp_json.get("data", {}).get("user", {}).get("result", {}).get("legacy", {})
-                is_blue_verified = resp_json.get("data", {}).get("user", {}).get("result", {}).get("is_blue_verified", False)
-                # Check if account is protected/private
                 if legacy.get("protected"):
                     raise TargetPrivateError("Hedef hesap gizli (Protected). Icerik kazinamiyor.")
                 bio = legacy.get("description", "")
                 if bio:
                     scraped_data["bio"] = bio
 
-            # 2. Tweetleri Yakalama (UserTweets)
             elif "UserTweets" in response.url:
                 instructions = resp_json.get("data", {}).get("user", {}).get("result", {}).get("timeline_v2", {}).get("timeline", {}).get("instructions", [])
                 for instr in instructions:
-                    if instr.get("type") == "TimelineAddEntries":
-                        entries = instr.get("entries", [])
-                        for entry in entries:
-                            # Sadece Tweetleri al (Promoted vs geç)
-                            if "tweet" in entry.get("entryId", ""):
-                                legacy = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {}).get("legacy", {})
-                                if not legacy:
-                                    continue
-                                
-                                # Metin
-                                text = legacy.get("full_text", "")
-                                if text:
-                                    scraped_data["posts"].append(text.replace("\n", " "))
-                                
-                                # Zaman
-                                created_at = legacy.get("created_at", "")
-                                if created_at:
-                                    scraped_data["post_times"].append(created_at)
-                                
-                                # Medya (Görsel)
-                                media = legacy.get("entities", {}).get("media", [])
-                                for m in media:
-                                    if m.get("type") == "photo":
-                                        scraped_data["images"].append(m.get("media_url_https", ""))
+                    if instr.get("type") != "TimelineAddEntries":
+                        continue
+                    for entry in instr.get("entries", []):
+                        if "tweet" not in entry.get("entryId", ""):
+                            continue
+                        legacy = entry.get("content", {}).get("itemContent", {}).get("tweet_results", {}).get("result", {}).get("legacy", {})
+                        if not legacy:
+                            continue
+                        text = legacy.get("full_text", "")
+                        if text:
+                            scraped_data["posts"].append(text.replace("\n", " "))
+                        created_at = legacy.get("created_at", "")
+                        if created_at:
+                            scraped_data["post_times"].append(created_at)
+                        for media in legacy.get("entities", {}).get("media", []):
+                            if media.get("type") == "photo":
+                                scraped_data["images"].append(media.get("media_url_https", ""))
 
-        except RateLimitError as e:
-            scraped_data["error"] = e
-        except TargetPrivateError as e:
-            scraped_data["error"] = e
-        except Exception as e:
-            # Sessizce yut, ağ trafiği gürültülü olabilir
-            pass
+        except (RateLimitError, TargetPrivateError):
+            raise
+        except Exception:
+            logger.exception("Unhandled GraphQL response processing failure")
+            raise
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
         ctx = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
-        # Cookie Enjeksiyonu
+
         if cookies:
             parsed = []
             for part in cookies.split(";"):
@@ -105,32 +89,34 @@ def scrape_readonly(profile_url: str, cookies: str = None) -> dict:
                 try:
                     ctx.add_cookies(parsed)
                 except Exception:
-                    pass
-                    
+                    logger.exception("Cookie injection failed")
+                    raise
+
         page = ctx.new_page()
-        
-        # Ağ Dinleyicisini Tak
         page.on("response", intercept_response)
-        
-        # Hedefe Git
         page.goto(profile_url, wait_until="networkidle", timeout=20000)
-        
-        # Ekstra 3 saniye bekle ki GraphQL asenkron yanıtları düşsün
         page.wait_for_timeout(3000)
-        
         browser.close()
-        
-        
+
         if "error" in scraped_data:
             raise scraped_data["error"]
-
-        # Fallback yerine Exception (Halüsinasyon Zırhı)
         if not scraped_data["bio"] and not scraped_data["posts"]:
-            raise Exception("InsufficientEvidenceError: X profili tamamen bos veya veri cekilemedi. Halusinasyon riskine karsi islem durduruldu.")
-            
-        # Sadece ilk 5 tweet ve resmi tut
+            raise RuntimeError("InsufficientEvidenceError: X profili tamamen bos veya veri cekilemedi.")
+
         scraped_data["posts"] = scraped_data["posts"][:5]
         scraped_data["post_times"] = scraped_data["post_times"][:5]
         scraped_data["images"] = scraped_data["images"][:3]
-        
         return scraped_data
+
+
+def main() -> None:
+    if len(sys.argv) != 2 or sys.argv[1] != "--stdin":
+        print(json.dumps({"status": "failed", "error": "Usage: scraper.py --stdin"}))
+        raise SystemExit(1)
+    payload = json.load(sys.stdin)
+    result = scrape_readonly(payload["target_url"], cookies=payload.get("cookies"))
+    print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
