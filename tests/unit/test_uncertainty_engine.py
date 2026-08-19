@@ -25,9 +25,10 @@ def test_uncertainty_evaluate_empty_list():
     result = DummyResultBaseModel(name="test", evidence=[], confidence=0.8)
     report = engine.evaluate(result, "test_agent")
     
-    assert report.is_suspicious
-    assert report.confidence == 0.1
-    assert "Eksik" in report.reason
+    # Due to removing the overly aggressive 'any list empty means fail' check,
+    # the confidence drops to 0.66 (1 empty field out of 3) but does not trigger suspicious
+    assert not report.is_suspicious
+    assert abs(report.confidence - 0.666) < 0.01
 
 def test_uncertainty_evaluate_missing_str():
     engine = UncertaintyEngine()
