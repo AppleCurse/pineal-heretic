@@ -1,8 +1,7 @@
 import pytest
-from pydantic import BaseModel
 
 from agent_core.agents.autonomous_verifier import AutonomousVerifier
-from agent_core.agents.resonance_calculator import ResonanceCalculator, ResonanceProfile
+from agent_core.agents.resonance_calculator import ResonanceCalculator
 from agent_core.services.canonical_memory import CanonicalMemory
 from agent_core.services.uncertainty_engine import UncertaintyEngine, UncertaintyReport
 from agent_core.task_executor import PinealExecutor
@@ -17,16 +16,21 @@ class PassThroughUncertainty(UncertaintyEngine):
         return UncertaintyReport(confidence=0.9, is_suspicious=False, reason="test")
 
 
+class RouteProvider:
+    async def analyze(self, _):
+        return ResonanceOnlyRoute()
+
+
 @pytest.mark.asyncio
 async def test_real_executor_uses_real_resonance_calculator(tmp_path):
     executor = PinealExecutor()
-    executor.router = type("RouteProvider", (), {"analyze": lambda self, _: __import__("asyncio").sleep(0, result=ResonanceOnlyRoute())})()
+    executor.router = RouteProvider()
     executor.uncertainty = PassThroughUncertainty()
     executor.memory = CanonicalMemory(str(tmp_path))
 
     input_data = {
         "user_authentic_vector": {"depth": 0.9, "energy": 0.3},
-        "target_analysis": {"achilles_score": 80},
+        "target_analysis": {"achilles_score": 10},
         "target_profile": {},
     }
 
@@ -44,7 +48,7 @@ async def test_resonance_failure_marks_task_failed(tmp_path):
             raise RuntimeError("synthetic resonance failure")
 
     executor = PinealExecutor()
-    executor.router = type("RouteProvider", (), {"analyze": lambda self, _: __import__("asyncio").sleep(0, result=ResonanceOnlyRoute())})()
+    executor.router = RouteProvider()
     executor.memory = CanonicalMemory(str(tmp_path))
     executor.agents["resonance_calc"] = FailingResonance()
 
