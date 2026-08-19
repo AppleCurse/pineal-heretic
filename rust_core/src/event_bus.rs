@@ -72,6 +72,7 @@ impl EventBus {
         Self { sender, _receiver_count: 0 }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn publish(&self, event: AgentEvent) -> Result<(), broadcast::error::SendError<TelemetryEvent>> {
         let telemetry = TelemetryEvent { timestamp: Utc::now(), event, correlation_id: None };
         self.sender.send(telemetry)?;
@@ -82,6 +83,7 @@ impl EventBus {
         self.sender.subscribe()
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn publish_with_correlation(
         &self,
         event: AgentEvent,

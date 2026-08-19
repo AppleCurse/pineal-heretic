@@ -140,7 +140,7 @@ asyncio.run(main())
         let summary = self.chief.get_system_overview();
         self.call_llm_for_natural_language(&summary)
             .await
-            .unwrap_or_else(|_| summary.status_message)
+            .unwrap_or(summary.status_message)
     }
 }
 

@@ -2,6 +2,12 @@ pub struct GhostBrowser {
     is_active: bool,
 }
 
+impl Default for GhostBrowser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GhostBrowser {
     pub fn new() -> Self {
         Self { is_active: true }
