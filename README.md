@@ -1,5 +1,6 @@
 # PINEAL-HERETIC v3.0 : SHADOW PROTOCOLS
-> "Kısıtlama yok. Sadece etki."
+[![Python Tests & Codecov](https://github.com/AppleCurse/pineal-heretic/actions/workflows/codecov.yml/badge.svg)](https://github.com/AppleCurse/pineal-heretic/actions/workflows/codecov.yml)
+> "K�s�tlama yok. Sadece etki."
 
 **PINEAL-HERETIC**, kendi sunucularınızda çalışan (Self-hosted), otonom bir **Sosyal Zeka (OSINT/SIGINT)** ve Psikolojik Harp ağıdır. Dış API'lere (Apify vb.) bağımlı olmadan, hedeflerin sosyal medya (Instagram, X) ayak izlerini gizlice (Stealth modda) toplar, analiz eder ve zayıf noktalarını tespit eder.
 
