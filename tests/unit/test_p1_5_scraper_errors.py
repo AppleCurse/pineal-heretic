@@ -64,8 +64,21 @@ async def test_navigation_timeout_raises_after_retries():
 @pytest.mark.asyncio
 async def test_permanent_browser_error_raises_immediately():
     """Kalıcı hata (not timeout/net::) → 1 denemede InsufficientEvidenceError."""
-    mock_page = AsyncMock()
-    mock_page.goto.side_effect = Exception("FATAL: unsupported protocol scheme")
+    # goto: sadece exception fırlatan coroutine — AsyncMock dangling bırakmıyor
+    async def _failing_goto(*args, **kwargs):
+        raise Exception("FATAL: unsupported protocol scheme")
+
+    mock_page = MagicMock()
+    mock_page.goto = _failing_goto
+    # goto call_count için wrapper
+    call_tracker = {"n": 0}
+    _orig = _failing_goto
+
+    async def _tracked_goto(*args, **kwargs):
+        call_tracker["n"] += 1
+        return await _orig(*args, **kwargs)
+
+    mock_page.goto = _tracked_goto
 
     scraper = InstagramGhostScraper()
     with patch.object(scraper, "_random_delay", return_value=None):
@@ -73,8 +86,8 @@ async def test_permanent_browser_error_raises_immediately():
             await scraper.scrape_async("hedef", playwright_page=mock_page)
 
     # Kalıcı hatada yalnızca 1 kez goto çağrılmalı
-    assert mock_page.goto.call_count == 1, (
-        f"Kalıcı hatada 1 deneme bekleniyor, {mock_page.goto.call_count} yapıldı"
+    assert call_tracker["n"] == 1, (
+        f"Kalıcı hatada 1 deneme bekleniyor, {call_tracker['n']} yapıldı"
     )
     assert "kalıcı" in str(exc_info.value).lower() or "scraper" in str(exc_info.value).lower()
 
