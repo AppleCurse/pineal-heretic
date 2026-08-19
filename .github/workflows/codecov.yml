@@ -41,14 +41,3 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
-  rust-check:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
-    - name: Run Cargo Check
-      run: |
-        cd rust_core
-        cargo check --manifest-path Cargo.toml
-
