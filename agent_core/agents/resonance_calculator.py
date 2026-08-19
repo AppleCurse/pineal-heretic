@@ -23,8 +23,6 @@ class ResonanceCalculator:
         target_obj = input_data.get('target_analysis', {})
         if hasattr(target_obj, 'model_dump'):
             t_dict = target_obj.model_dump()
-        elif hasattr(target_obj, 'dict'):
-            t_dict = target_obj.dict()
         else:
             t_dict = target_obj if isinstance(target_obj, dict) else {}
 

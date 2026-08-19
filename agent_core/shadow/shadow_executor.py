@@ -65,7 +65,7 @@ class ShadowExecutor:
                 'detected_wound': strategy['vector'],
                 'resonance_potential': dark.exploitability
             },
-            'user_mirror': mirror_result.dict() if hasattr(mirror_result, 'dict') else mirror_result,
+            'user_mirror': mirror_result.model_dump() if hasattr(mirror_result, 'model_dump') else mirror_result,
             'sacred_rules': ""
         }
         pattern_result = await self.pattern.execute(pattern_input, None, self.llm_gateway)
