@@ -78,41 +78,17 @@ class PinealExecutor:
                 self._log("WARNING", "Gorsel indirilemedi: " + str(e)[:60])
         return paths
 
-    @staticmethod
-    def _user_vector(mirror) -> Dict[str, float]:
-        f = mirror.user_core_frequency
-        if "derin" in f:
-            return {"depth": 0.9, "energy": 0.3, "authenticity": 0.9}
-        if "arayici" in f:
-            return {"depth": 0.6, "energy": 0.5, "authenticity": 0.6}
-        return {"depth": 0.2, "energy": 0.8, "authenticity": 0.3}
-
-    @staticmethod
-    def _target_vector(reading) -> Dict[str, float]:
-        sig = reading.micro_signals
-        tension = sum(1 for s in sig if s.signal_type == "tension")
-        void = sum(1 for s in sig if s.signal_type == "void")
-        auth = sum(1 for s in sig if s.signal_type == "authentic")
-        return {
-            "depth": min(0.3 + 0.2 * (void + tension), 1.0),
-            "energy": min(0.2 + 0.15 * len(sig), 1.0),
-            "authenticity": min(0.3 + 0.2 * auth, 1.0),
-        }
-
     async def _deep_research(self, input_data, suspicious, agent_name):
         prompt = (
-            "Onceki analiz supheli bulundu. Kanit: " + suspicious.json() +
+            "Onceki analiz supheli bulundu. Kanit: " + suspicious.model_dump_json() +
             "\nKurallar: 1) Emin degilsen 'bilmiyorum' de 2) Tahmin uretme 3) Sadece veride olanlari analiz et. Yeniden analiz et."
         )
         verified = await self.llm_gateway.query(prompt, temperature=0.1, tier=1)
         return VerifiedNote(note=verified)
 
     async def execute_task(self, input_data: Dict[str, Any], task_id: str) -> TaskStatus:
-        status = TaskStatus(task_id=task_id, status="pending", created_at=datetime.now(timezone.utc))
-        status.status = "processing"
-
-        sacred_rules = self.injector.fetch_active_rules()
-        input_data["sacred_rules"] = sacred_rules
+        status = TaskStatus(task_id=task_id, status="processing", created_at=datetime.now(timezone.utc))
+        input_data["sacred_rules"] = self.injector.fetch_active_rules()
 
         imgs = input_data.get("target_profile", {}).get("images", [])
         if imgs and isinstance(imgs[0], str) and imgs[0].startswith("http"):
@@ -120,7 +96,6 @@ class PinealExecutor:
 
         route: RoutePlan = await self.router.analyze(input_data)
         self._log("INFO", "[" + task_id + "] ROUTE: " + " -> ".join(route.agents))
-
         deferred = []
         try:
             for agent_name in route.agents:
@@ -159,13 +134,13 @@ class PinealExecutor:
                         raise InsufficientEvidenceError("Supheli kanit dogrulanamadi: " + str(e)[:80])
 
                 if agent_name == "mirror_truth":
-                    input_data["user_mirror"] = result.dict() if hasattr(result, 'dict') else result.model_dump()
+                    input_data["user_mirror"] = result.model_dump()
                     input_data["user_authentic_vector"] = self._calculate_authentic_vector(input_data["user_mirror"])
                 if agent_name == "human_behavior":
-                    input_data["target_analysis"] = result.dict() if hasattr(result, 'dict') else result.model_dump()
+                    input_data["target_analysis"] = result.model_dump()
                     input_data["target_authentic_vector"] = self._calculate_authentic_vector(input_data["target_analysis"])
 
-                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                status.evidence_chain.append({"agent": agent_name, "result": result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
 
                 if agent_name == "resonance_calc" and result.compatibility_score < 0.70:
                     self._log("ERROR", "[" + task_id + "] FREKANS UYUSMAZLIGI: " + str(round(result.compatibility_score, 2)))
@@ -184,14 +159,13 @@ class PinealExecutor:
                     self._log("ERROR", f"[{task_id}] AGENT {agent_name} BASTARISIZ: {type(e).__name__}: {str(e)[:200]}")
                     await self.memory.merge_evidence(task_id, status.evidence_chain)
                     return status
-                status.evidence_chain.append({"agent": agent_name, "result": result.dict() if hasattr(result, 'dict') else result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                status.evidence_chain.append({"agent": agent_name, "result": result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
                 self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
 
             status.status = "completed"
             status.completed_at = datetime.now(timezone.utc)
             await self.memory.merge_evidence(task_id, status.evidence_chain)
             self._log("INFO", "[" + task_id + "] TAMAMLANDI. Kanit adimi: " + str(len(status.evidence_chain)))
-
         except InsufficientEvidenceError as e:
             self._log("ERROR", "[" + task_id + "] KANIT KILIDI: " + str(e))
             status.status = "halted_evidence"
@@ -202,7 +176,6 @@ class PinealExecutor:
     def _calculate_authentic_vector(self, data_dict: dict) -> dict:
         import re
         import numpy as np
-
         text = ""
         def extract_text(d):
             nonlocal text
@@ -212,29 +185,23 @@ class PinealExecutor:
                 for item in d: extract_text(item)
             elif isinstance(d, str):
                 text += " " + d
-
         extract_text(data_dict)
         text = text.strip()
-
         if not text:
             return {"depth": 0.5, "energy": 0.5}
-
         words = re.findall(r'\b\w+\b', text.lower())
         unique_words = set(words)
         ttr = len(unique_words) / len(words) if words else 0
-        sentences = re.split(r'[.!?]+', text)
-        sentences = [s for s in sentences if s.strip()]
+        sentences = [s for s in re.split(r'[.!?]+', text) if s.strip()]
         avg_sentence_len = len(words) / max(1, len(sentences))
         depth_val = (ttr * 0.6) + (min(avg_sentence_len, 20) / 20 * 0.4)
         depth = float(np.clip(depth_val, 0.1, 1.0))
-
         exclamations = text.count('!')
         caps = sum(1 for c in text if c.isupper())
         total_chars = max(1, len(text))
         caps_ratio = caps / total_chars
         energy_val = (exclamations * 0.1) + (caps_ratio * 2.0)
         energy = float(np.clip(energy_val, 0.1, 1.0))
-
         return {"depth": round(depth, 3), "energy": round(energy, 3)}
 
 executor = PinealExecutor()
