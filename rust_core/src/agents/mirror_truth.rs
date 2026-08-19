@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::agent_pipeline::{AgentNode, AnalysisResult, HaltReason};
 use crate::uncertainty::{ConfidenceLevel, UncertaintyEngine};
-use crate::event_bus::{AgentEvent, EventBus, TelemetryEvent};
+use crate::event_bus::{AgentEvent, EventBus};
 use uuid::Uuid;
 
 /// Mirror Reflection (Hedefin Çıktısı)
@@ -71,7 +71,7 @@ impl AgentNode for MirrorTruthAgent {
         );
 
         // 4. LLM Çağrısı
-        let llm_json_str = self.call_llm(&prompt).await.map_err(|e| HaltReason::NetworkTimeout)?;
+        let llm_json_str = self.call_llm(&prompt).await.map_err(|_e| HaltReason::NetworkTimeout)?;
 
         // 5. UNCERTAINTY ENGINE: LLM Halüsinasyon Kontrolü
         let required_fields = vec![

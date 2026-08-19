@@ -1,5 +1,5 @@
 use crate::chief::{ChiefEngine, ExecutiveSummary};
-use async_trait::async_trait;
+
 use tokio::process::Command;
 
 pub const ASPASIA_SYSTEM_PROMPT: &str = r#"
@@ -147,7 +147,7 @@ asyncio.run(main())
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event_bus::{AgentEvent, TelemetryEvent, Severity};
+    use crate::event_bus::{AgentEvent, TelemetryEvent};
     use uuid::Uuid;
     use tokio;
 

@@ -18,7 +18,7 @@ pub struct TaskManager {
     event_bus: Arc<EventBus>,
     python_path: String,
     scraper_path: String,
-    executor_path: String,
+    _executor_path: String,
 }
 
 impl TaskManager {
@@ -35,7 +35,7 @@ impl TaskManager {
             event_bus,
             python_path: "python3".to_string(),
             scraper_path: format!("{}/scraper.py", project_root),
-            executor_path: format!("{}/agent_core/task_executor.py", project_root),
+            _executor_path: format!("{}/agent_core/task_executor.py", project_root),
         }
     }
 

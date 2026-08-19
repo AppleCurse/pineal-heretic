@@ -54,13 +54,13 @@ pub enum UncertaintyError {
 
 /// Belirsizlik Motoru - ana işleyici
 pub struct UncertaintyEngine {
-    task_id: uuid::Uuid,
+    _task_id: uuid::Uuid,
     required_fields: Vec<String>,
 }
 
 impl UncertaintyEngine {
     pub fn new(task_id: uuid::Uuid, required_fields: Vec<String>) -> Self {
-        Self { task_id, required_fields }
+        Self { _task_id: task_id, required_fields }
     }
 
     /// Veriyi doğrula ve ConfidenceLevel döndür

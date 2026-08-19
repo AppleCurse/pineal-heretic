@@ -21,7 +21,7 @@ pub struct ChiefEngine {
 #[derive(Debug, Clone)]
 struct TaskContext {
     agent_name: String,
-    start_time: chrono::DateTime<chrono::Utc>,
+    _start_time: chrono::DateTime<chrono::Utc>,
     last_step: String,
     error_count: u32,
     is_halted: bool,
@@ -39,7 +39,7 @@ impl ChiefEngine {
         match &telemetry.event {
             AgentEvent::TaskStarted { task_id, agent_name, input_summary } => {
                 self.task_summaries.insert(*task_id, TaskContext {
-                    agent_name: agent_name.clone(), start_time: telemetry.timestamp, last_step: "Başlatıldı".to_string(), error_count: 0, is_halted: false,
+                    agent_name: agent_name.clone(), _start_time: telemetry.timestamp, last_step: "Başlatıldı".to_string(), error_count: 0, is_halted: false,
                 });
                 Some(ExecutiveSummary { status_message: format!("{} ajanı {} görevine başladı.", agent_name, input_summary), recommended_actions: vec!["İlerlemeyi izleyin.".to_string()], critical_alerts: vec![], system_health: 100 })
             },

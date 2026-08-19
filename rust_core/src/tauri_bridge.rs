@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
-use crate::chief::ChiefEngine;
+
 use crate::aspasia::AspasiaEngine;
 use crate::event_bus::{EventBus, TelemetryEvent};
 use crate::task_isolation::TaskManager;
@@ -31,8 +31,9 @@ pub struct FrequencyParams {
     pub envies: Vec<String>,
 }
 
-/// 1. Tauri IPC Commands - Genişletilmiş Parametreler
+// 1. Tauri IPC Commands - Genişletilmiş Parametreler
 
+#[allow(unused_variables)]
 #[tauri::command]
 pub async fn start_analysis(
     target_url: String,
@@ -60,7 +61,7 @@ pub async fn start_analysis(
 
 #[tauri::command]
 pub async fn query_aspasia(state: tauri::State<'_, CoreState>) -> Result<String, String> {
-    let mut aspasia = state.aspasia.lock().await;
+    let aspasia = state.aspasia.lock().await;
     let report = aspasia.report_system_overview().await;
     Ok(report)
 }
