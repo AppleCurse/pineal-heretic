@@ -23,34 +23,34 @@ class PatternInterrupt:
     Kural: Geri çekil ve boşluk bırak. Reaktif olma.
     """
     
-    # KESİN, soru iması İÇERMEYEN şablonlar
+    # ZEKİ HEDEFLERE ÖZEL, KESİN, soru iması İÇERMEYEN şablonlar (Ucuz numaralar yasak)
     TEMPLATES = {
         'mirror_truth': [
-            "O {detail}'ı gördüm. Çoğu insan kaçırır ama sen oraya sabitlemişsin. "
-            "Bu bir tesadüf değil, bir seçim. Ben de benzer seçimler yaparım.",
+            "O {detail}'ı gördüm. Zeki insanlar detayları sakladıklarını sanırlar, "
+            "oysa en çok oraya odaklanırlar. Bu bir kamuflaj değil, bir imza.",
             
             "{detail}'daki o {micro_signal}. "
-            "Yüzeyde değil, arka planda duran. "
-            "Orada bir şey var ve sen bunu biliyorsun."
+            "Herkesin kaçırdığı ama senin özellikle oraya bıraktığın bir zeka parıltısı. "
+            "Oyununu görüyorum."
         ],
         
         'void_resonance': [
             "O {time}'de attığın şey. "
-            "Kalabalık yerde yalnızlık hissi. "
-            "Ben de o saatlerde kendi sessizliğimle konuşurum.",
+            "Kalabalığı manipüle edip kendi yalnızlığına çekildiğin o an. "
+            "Bu bir zeka göstergesi değil, bir yorgunluk.",
             
             "{reference}'daki o an. "
-            "Kimse anlamıyor ama sen anlıyorsun. "
-            "Ben de anlıyorum."
+            "Zihninin hızına yetişemedikleri için araya koyduğun o analitik mesafe. "
+            "Ben de o mesafeyi bilirim."
         ],
         
         'contradiction_bridge': [
             "{surface} diyorsun ama {behavior} yapıyorsun. "
-            "Bu bir çelişki değil, bir yorgunluk. "
-            "Ben de bazen kendimi ikiye bölerim.",
+            "Kusursuz bir zeka her zaman kendi içinde bir çelişki barındırır. "
+            "Bu senin savunma mekanizman.",
             
             "O {claimed_identity} pozunun ardındaki {real_signal}. "
-            "Maske değil, korunma. Ben de korunurum."
+            "Bunu sıradan insanlara yutturabilirsin. Ama bana değil."
         ]
     }
     
@@ -59,13 +59,25 @@ class PatternInterrupt:
         user_truth = input_data.get('user_mirror', {})
         sacred_rules = input_data.get('sacred_rules', "")
         
+        # Dinamik şablon seçimi ve detay çıkarımı
+        t_dict = target_analysis.model_dump() if hasattr(target_analysis, 'model_dump') else (target_analysis if isinstance(target_analysis, dict) else {})
+        detail = self._extract_specific_detail(t_dict)
+        micro = self._extract_micro_signal(t_dict)
+        
+        import random
+        template = random.choice(self.TEMPLATES['mirror_truth']).format(detail=detail, micro_signal=micro)
+        
         target_json = target_analysis.model_dump_json(indent=2) if hasattr(target_analysis, 'model_dump_json') else str(target_analysis)
         user_json = user_truth.model_dump_json(indent=2) if hasattr(user_truth, 'model_dump_json') else str(user_truth)
         
         prompt = (
             f"Sen 'Pattern Interrupt' ajanısın. Görevin, beklentileri kıran ve hedefte yankı uyandıran tek bir açılış cümlesi üretmek.\n"
             f"Bununla yetinmeyeceksin; satranç oynar gibi hedefin bu kancaya verebileceği 3 olası tepkiyi (Agresif, Savunmacı, İlgili) öngörüp, 2. ve 3. hamleleri (counter-moves) önceden hazırlayacaksın.\n"
-            f"Asla reaktif olma, boşluk bırak, soru sorma.\n\n"
+            f"Asla reaktif olma, boşluk bırak, soru sorma.\n"
+            f"KRİTİK KURAL: HEDEF SON DERECE ZEKİ. Ucuz manipülasyonları, standart taktikleri anında sezer. Asla rıza veya onay arama.\n"
+            f"Açılış cümlen, sadece onun zekasına hitap eden, soğuk, sarsıcı ve tamamen analitik bir tespit (intellectual strike) olmalı.\n\n"
+            f"ÖNERİLEN GERÇEK ŞABLON YAKLAŞIMI:\n"
+            f"- {template}\n\n"
             f"Hedef Analizi:\n{target_json}\n\n"
             f"Kullanıcı Gerçeği:\n{user_json}\n\n"
             f"{sacred_rules}\n\n"
@@ -82,13 +94,20 @@ class PatternInterrupt:
         """
         signals = analysis.get('micro_signals', [])
         if not signals:
-            return "fotoğraftaki detay"
+            return "arka plandaki detay"
         
         # En yüksek ağırlıklı sinyal
-        top_signal = max(signals, key=lambda x: x.psychological_weight)
-        return top_signal.evidence[:50]  # İlk 50 karakter
+        try:
+            top_signal = max(signals, key=lambda x: x.get('psychological_weight', 0) if isinstance(x, dict) else getattr(x, 'psychological_weight', 0))
+            evidence = top_signal.get('evidence', '') if isinstance(top_signal, dict) else getattr(top_signal, 'evidence', '')
+            return evidence[:50]
+        except Exception:
+            return "sessiz gerginlik"
         
     def _extract_micro_signal(self, analysis: Dict) -> str:
+        signals = analysis.get('micro_signals', [])
+        if signals:
+            return "çelişki"
         return "sessiz sinyal"
         
     def _extract_temporal_signal(self, analysis: Dict) -> str:

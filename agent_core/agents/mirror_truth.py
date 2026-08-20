@@ -19,14 +19,20 @@ class MirrorOfTruth:
         user_data = input_data.get('user_profile', {})
         sacred_rules = input_data.get('sacred_rules', "")
         
+        core_freq = self._extract_core_frequency(user_data)
+        anchors = self._find_anchors(user_data)
+        
         prompt = (
             f"Sen 'Mirror of Truth' ajanısın. Görevin, verilen kullanıcı verisinden yüzey kimliğini ve gerçek (core) frekansı bulmak.\n"
             f"Kullanıcı Verisi:\n"
             f"Ritüeller: {user_data.get('private_rituals', [])}\n"
             f"Müzik: {user_data.get('late_night_playlist', [])}\n"
             f"Kıskançlık/Arzu: {user_data.get('secret_envies', [])}\n\n"
+            f"GERÇEK METRİKLER (NLP ile Çıkarılmış Frekans ve Çapalar):\n"
+            f"- Algoritmik Kök Frekans Sinyali: {core_freq}\n"
+            f"- NLP Tabanlı Sabit Noktalar (Anchors): {anchors}\n\n"
             f"{sacred_rules}\n"
-            f"Şimdi bu verileri analiz et ve beklenen JSON formatında çıktı üret."
+            f"Şimdi bu ham algoritmik verileri ve profil detaylarını derinlemesine analiz et ve beklenen JSON formatında çıktı üret."
         )
         
         # Pydantic şemasıyla katı sorgu
@@ -37,39 +43,35 @@ class MirrorOfTruth:
     
     def _extract_core_frequency(self, user_data: Dict) -> str:
         """
-        Kullanıcının yalnız kaldığında, kimse görmediğinde yaptığı şeyler
+        Kullanıcının yalnız kaldığında yaptığı eylemlerden dinamik frekans analizi
         """
-        rituals = user_data.get('private_rituals', [])
-        music_taste = user_data.get('late_night_playlist', [])
-        envy_triggers = user_data.get('secret_envies', [])
+        import re
+        from collections import Counter
         
-        # Frekans vektörü oluştur
-        frequency_vector = {
-            'introversion': len(rituals) > 3,
-            'depth_seeking': 'acoustic' in str(music_taste).lower() or 'jazz' in str(music_taste).lower(),
-            'authenticity': len(envy_triggers) > 0  # Envy = Gerçek arzu
-        }
+        rituals = " ".join(user_data.get('private_rituals', [])).lower()
+        music = " ".join(user_data.get('late_night_playlist', [])).lower()
+        envy = " ".join(user_data.get('secret_envies', [])).lower()
         
-        if all(frequency_vector.values()):
-            return "derin_sakin_klasik_ruh"
-        elif frequency_vector['depth_seeking']:
-            return "arayici_ruh"
-        else:
-            return "yuzeyde_kaybolmus"
+        text = f"{rituals} {music} {envy}"
+        words = [w for w in re.findall(r'\b\w+\b', text) if len(w) > 3]
+        
+        if not words:
+            return "belirsiz_frekans"
+            
+        common = Counter(words).most_common(3)
+        return "_".join([w for w, c in common])
     
     def _find_anchors(self, user_data: Dict) -> list:
         """
-        Kullanıcının gerçekliğini sabitleyen şeyler
+        Dinamik anchor (sabit nokta) tespiti - NLP ile
         """
-        anchors = []
+        import re
+        from collections import Counter
         
-        # Neşet Ertaş testi (Kullanıcının örneğinden)
-        if 'neset_ertas' in str(user_data.get('music', '')).lower() or 'neset_ertas' in str(user_data.get('private_rituals', '')).lower():
-            anchors.append('anadolu_melankolisi')
+        rituals = " ".join(user_data.get('private_rituals', [])).lower()
+        words = [w for w in re.findall(r'\b\w+\b', rituals) if len(w) > 4]
         
-        # Çay/kitap ritüeli
-        if any(word in str(user_data.get('rituals', '')).lower() or word in str(user_data.get('private_rituals', '')).lower() 
-               for word in ['çay', 'kitap', 'yalniz']):
-            anchors.append('yalnizlik_rituelleri')
-        
-        return anchors
+        if not words:
+            return ["bilinmeyen_caba"]
+            
+        return [w + "_anchor" for w, c in Counter(words).most_common(3)]

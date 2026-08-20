@@ -56,7 +56,10 @@ app.state.rooms = {}  # client_id -> {"executor": PinealExecutor, "vault": {}, "
 
 def get_room(client_id: str) -> dict:
     if client_id not in app.state.rooms:
-        executor = PinealExecutor(log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg))
+        executor = PinealExecutor(
+            log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg),
+            snapshot_callback=lambda s: sync_snapshot(client_id, s)
+        )
         vault = {}
         
         # Otomatik Kasa (.pineal_vault.json / .env) yüklemesi
@@ -123,6 +126,29 @@ def sync_log(client_id: str, level: str, msg: str):
         loop.create_task(broadcast_log(client_id, level, msg))
     except RuntimeError:
         pass 
+
+async def broadcast_snapshot(client_id: str, snapshot: Any):
+    payload = json.dumps({
+        "type": "snapshot_update",
+        "current_agent": snapshot.current_agent,
+        "status": snapshot.status,
+        "runs": {name: {"status": r.status, "confidence": r.confidence} for name, r in snapshot.agent_runs.items()}
+    })
+    room = app.state.rooms.get(client_id)
+    if not room: return
+    ws_set = room["websockets"]
+    for ws in list(ws_set):
+        try:
+            await ws.send_text(payload)
+        except:
+            ws_set.discard(ws)
+
+def sync_snapshot(client_id: str, snapshot: Any):
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(broadcast_snapshot(client_id, snapshot))
+    except RuntimeError:
+        pass
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -429,6 +455,7 @@ class AspasiaChatPayload(BaseModel):
     client_id: str
     user_message: str
     model_override: Optional[str] = None
+    image_data: Optional[str] = None
 
 @app.post("/api/aspasia/chat")
 async def aspasia_chat(payload: AspasiaChatPayload):
@@ -438,11 +465,7 @@ async def aspasia_chat(payload: AspasiaChatPayload):
     if not aspasia:
         return {"error": "Aspasia Kokpit Şefi yüklenemedi"}
     
-    resp = await aspasia.chat(payload.user_message, room, payload.model_override)
-    
-    if resp.action:
-        await broadcast_log(payload.client_id, "WARNING", f"ASPASIA MÜDAHALESİ: {resp.action.reason}")
-        
+    resp = await aspasia.chat(payload.user_message, room, payload.model_override, payload.image_data)
     return resp.model_dump()
 
 class IntervenePayload(BaseModel):
@@ -451,8 +474,8 @@ class IntervenePayload(BaseModel):
     target_agent: Optional[str] = None
     parameters: dict = {}
 
-@app.post("/api/aspasia/intervene")
-async def aspasia_intervene(req: IntervenePayload):
+@app.post("/api/executor/intervene")
+async def executor_intervene(req: IntervenePayload):
     """Kullanıcının doğrudan müdahale komutunu PinealExecutor üzerinde çalıştırır"""
     room = get_room(req.client_id)
     executor = room.get("executor")
@@ -477,7 +500,7 @@ async def aspasia_intervene(req: IntervenePayload):
 class InterpreterPayload(BaseModel):
     client_id: str
     prompt: str
-    auto_run: bool = True
+    auto_run: bool = False
 
 @app.post("/api/interpreter/execute")
 async def interpreter_execute(req: InterpreterPayload):
@@ -503,6 +526,7 @@ async def interpreter_execute(req: InterpreterPayload):
         
     return res.model_dump()
 
-os.makedirs("frontend", exist_ok=True)
+static_dir = "frontend/dist" if os.path.exists("frontend/dist") else "frontend"
+os.makedirs(static_dir, exist_ok=True)
 # Sona ekliyoruz ki api rotaları statik dosyalardan önce ezilmesin
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")

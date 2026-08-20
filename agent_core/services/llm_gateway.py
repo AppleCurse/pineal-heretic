@@ -15,7 +15,7 @@ class LLMGateway:
     TIER_2_MODEL = "meta-llama/llama-3.1-8b-instruct" # Hızlı/Ucuz (Basit veri işleme)
 
     LOCAL_DEFAULT_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/v1")
-    LOCAL_DEFAULT_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen2.5-coder:latest")
+    LOCAL_DEFAULT_MODEL = os.getenv("LOCAL_LLM_MODEL", "dolphin-llama3:latest")
 
     def __init__(self):
         self.api_key = os.getenv("OPENROUTER_API_KEY")

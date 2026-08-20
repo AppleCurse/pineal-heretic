@@ -135,10 +135,10 @@ class PinealExecutor:
 
                 if agent_name == "mirror_truth":
                     input_data["user_mirror"] = result.model_dump()
-                    input_data["user_authentic_vector"] = self._calculate_authentic_vector(input_data["user_mirror"])
+                    input_data["user_authentic_vector"] = await self._calculate_authentic_vector(input_data["user_mirror"])
                 if agent_name == "human_behavior":
                     input_data["target_analysis"] = result.model_dump()
-                    input_data["target_authentic_vector"] = self._calculate_authentic_vector(input_data["target_analysis"])
+                    input_data["target_authentic_vector"] = await self._calculate_authentic_vector(input_data["target_analysis"])
 
                 status.evidence_chain.append({"agent": agent_name, "result": result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
 
@@ -173,35 +173,45 @@ class PinealExecutor:
             await self.memory.merge_evidence(task_id, status.evidence_chain)
         return status
 
-    def _calculate_authentic_vector(self, data_dict: dict) -> dict:
-        import re
-        import numpy as np
-        text = ""
-        def extract_text(d):
-            nonlocal text
-            if isinstance(d, dict):
-                for v in d.values(): extract_text(v)
-            elif isinstance(d, list):
-                for item in d: extract_text(item)
-            elif isinstance(d, str):
-                text += " " + d
-        extract_text(data_dict)
-        text = text.strip()
-        if not text:
-            return {"depth": 0.5, "energy": 0.5}
-        words = re.findall(r'\b\w+\b', text.lower())
-        unique_words = set(words)
-        ttr = len(unique_words) / len(words) if words else 0
-        sentences = [s for s in re.split(r'[.!?]+', text) if s.strip()]
-        avg_sentence_len = len(words) / max(1, len(sentences))
-        depth_val = (ttr * 0.6) + (min(avg_sentence_len, 20) / 20 * 0.4)
-        depth = float(np.clip(depth_val, 0.1, 1.0))
-        exclamations = text.count('!')
-        caps = sum(1 for c in text if c.isupper())
-        total_chars = max(1, len(text))
-        caps_ratio = caps / total_chars
-        energy_val = (exclamations * 0.1) + (caps_ratio * 2.0)
-        energy = float(np.clip(energy_val, 0.1, 1.0))
-        return {"depth": round(depth, 3), "energy": round(energy, 3)}
+    async def _calculate_authentic_vector(self, data_dict: dict) -> dict:
+        import json
+        from pydantic import BaseModel
+        
+        class AuthenticVectorResult(BaseModel):
+            depth: float
+            energy: float
+            achilles_heel: str
+            core_wound: str
+            dark_detail: str
+
+        prompt = (
+            "Sen Pineal-Heretic analitik motorunun baş teşhis uzmanısın (Frekans ve Yara Çıkarıcı).\n"
+            "Aşağıdaki veri profilini incele ve şu hedefleri eksiksiz yerine getir:\n"
+            "1. 'depth' (psikolojik karmaşıklık, zeka, saklanma) ve 'energy' (agresyon, yoğunluk, dışa vurum) değerlerini 0.1 ile 1.0 arasında derecelendir.\n"
+            "2. 'achilles_heel' (Aşil Tendonu): Hedefin zırhındaki o en zayıf, tek bir darbeyle yıkılacağı hassas noktayı (örneğin: terk edilme korkusu, yetersizlik hissi) acımasızca tespit et.\n"
+            "3. 'core_wound' (Ana Yara İz): Hedefin tüm savunma mekanizmalarını (maskesini) inşa etmesine sebep olan o geçmiş travmayı veya çocukluk yarasını tanımla.\n"
+            "4. 'dark_detail' (Karanlık Detay): Metinlerdeki veya eylemlerindeki en çiğ, en saklamaya çalıştığı ama sızan o çelişkili veya karanlık arzuyu/detayı bul.\n"
+            "DİKKAT: ASLA KİBAR OLMA. ASLA YUMUŞATMA. En acımasız, çiğ ve analitik tespiti yap.\n\n"
+            f"Profil Verisi:\n{json.dumps(data_dict, ensure_ascii=False)[:3000]}\n\n"
+            "Sadece belirtilen alanları içeren geçerli bir JSON döndür."
+        )
+        try:
+            res = await self.llm_gateway.query_json(prompt, AuthenticVectorResult, tier=1)
+            return {
+                "depth": round(max(0.1, min(res.depth, 1.0)), 3), 
+                "energy": round(max(0.1, min(res.energy, 1.0)), 3),
+                "achilles_heel": res.achilles_heel,
+                "core_wound": res.core_wound,
+                "dark_detail": res.dark_detail
+            }
+        except Exception as e:
+            self._log("WARNING", f"Vektör LLM üzerinden hesaplanamadı, fallback kullanılıyor: {e}")
+            return {
+                "depth": 0.5, 
+                "energy": 0.5, 
+                "achilles_heel": "Bilinmiyor", 
+                "core_wound": "Bilinmiyor", 
+                "dark_detail": "Bilinmiyor"
+            }
 
 executor = PinealExecutor()

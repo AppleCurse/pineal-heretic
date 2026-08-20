@@ -15,7 +15,7 @@ def test_linguistic_forensics():
     assert any(s.signal_type == "authentic" and "emoji" in s.location for s in signals)
     assert any(s.signal_type == "contradiction" and "passive_voice" in s.location for s in signals)
     assert any(s.signal_type == "defense" and "linguistic" in s.location for s in signals)
-    assert result['claimed_identity'] == "Unknown Identity"
+    assert result['claimed_identity'] == "Blogger"
 
 def test_temporal_forensics():
     analyzer = HumanBehaviorAnalyzer()

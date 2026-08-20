@@ -3,7 +3,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic import BaseModel
 from datetime import datetime, timezone
-from agent_core.task_executor import PinealExecutor, TaskStatus, InsufficientEvidenceError
+from agent_core.task_executor import PinealExecutor
+from agent_core.domain.memory_models import TaskSnapshot
+from agent_core.task_executor import InsufficientEvidenceError
 
 class DummyResult(BaseModel):
     compatibility_score: float = 0.9
@@ -71,7 +73,7 @@ async def test_execute_task_full_flow(executor):
     
     status = await executor.execute_task(input_data, "task_1")
     
-    assert isinstance(status, TaskStatus)
+    assert isinstance(status, TaskSnapshot)
     assert status.status == "completed"
     assert status.task_id == "task_1"
     assert len(status.evidence_chain) == 3 # 3 agents in route
