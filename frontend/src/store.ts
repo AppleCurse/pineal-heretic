@@ -11,6 +11,7 @@ export const WS_BASE = 'ws://127.0.0.1:8000';
 export const logs = writable<Array<{ts: string, level: string, msg: string}>>([]);
 export const taskStatus = writable<any>(null);
 export const isProcessing = writable(false);
+export const telemetryEvents = writable<any[]>([]);
 
 // Eski Ghost scraper vb. state'leri (eğer hala lazımsa)
 export const scrapedUsername = writable('');

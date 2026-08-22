@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { clientId, WS_BASE, logs, taskStatus, isProcessing } from './store';
+  import { clientId, WS_BASE, logs, taskStatus, isProcessing, telemetryEvents } from './store';
 
   import UnifiedCompactPanel from './components/UnifiedCompactPanel.svelte';
   let ws: WebSocket;
@@ -18,6 +18,15 @@
         if (data.type === "log") {
           logs.update(l => {
             const newLogs = [...l, data];
+            if (newLogs.length > 50) newLogs.shift();
+            return newLogs;
+          });
+        } else if (data.event && data.event.event_type) {
+          telemetryEvents.update(arr => [...arr, data]);
+          logs.update(l => {
+            const evt = data.event;
+            const msg = `[${evt.event_type}] ${evt.agent_name} - ${evt.input_summary || evt.step_name || evt.error_message || ''}`;
+            const newLogs = [...l, { ts: new Date(data.timestamp).toLocaleTimeString(), level: evt.severity || "INFO", msg: msg }];
             if (newLogs.length > 50) newLogs.shift();
             return newLogs;
           });

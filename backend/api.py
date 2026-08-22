@@ -58,6 +58,7 @@ def get_room(client_id: str) -> dict:
     if client_id not in app.state.rooms:
         executor = PinealExecutor(
             log_callback=lambda lvl, msg: sync_log(client_id, lvl, msg),
+            emit_event_callback=lambda evt: sync_event(client_id, evt),
             snapshot_callback=lambda s: sync_snapshot(client_id, s)
         )
         vault = {}
@@ -127,15 +128,60 @@ def sync_log(client_id: str, level: str, msg: str):
     except RuntimeError:
         pass 
 
+async def broadcast_event(client_id: str, event: Any):
+    try:
+        from agent_core.schemas.telemetry import TelemetryEvent
+        telemetry = TelemetryEvent(event=event)
+        payload = telemetry.model_dump_json()
+        room = app.state.rooms.get(client_id)
+        if not room: return
+        if "events" not in room: room["events"] = []
+        room["events"].append(telemetry)
+        ws_set = room["websockets"]
+        for ws in list(ws_set):
+            try:
+                await ws.send_text(payload)
+            except:
+                ws_set.discard(ws)
+    except Exception as e:
+        print(f"Error broadcasting event: {e}")
+
+def sync_event(client_id: str, event: Any):
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(broadcast_event(client_id, event))
+    except RuntimeError:
+        pass
+
 async def broadcast_snapshot(client_id: str, snapshot: Any):
     payload = json.dumps({
         "type": "snapshot_update",
+        "task_id": snapshot.task_id,
         "current_agent": snapshot.current_agent,
         "status": snapshot.status,
-        "runs": {name: {"status": r.status, "confidence": r.confidence} for name, r in snapshot.agent_runs.items()}
+        "planned_agents": snapshot.planned_agents,
+        "completed_agents": snapshot.completed_agents,
+        "halted_reason": getattr(snapshot, "halted_reason", None),
+        "resonance_score": getattr(snapshot, "resonance_score", None),
+        "runs": {
+            name: {
+                "status": getattr(r, "status", None),
+                "confidence": getattr(r, "confidence", None),
+                "started_at": r.started_at.isoformat() if getattr(r, "started_at", None) else None,
+                "completed_at": r.completed_at.isoformat() if getattr(r, "completed_at", None) else None,
+                "error_message": getattr(r, "error_message", None),
+            }
+            for name, r in snapshot.agent_runs.items()
+        }
     })
     room = app.state.rooms.get(client_id)
     if not room: return
+    
+    # Active_tasks'a yaz
+    if "active_tasks" not in room:
+        room["active_tasks"] = {}
+    room["active_tasks"][snapshot.task_id] = snapshot
+    
     ws_set = room["websockets"]
     for ws in list(ws_set):
         try:

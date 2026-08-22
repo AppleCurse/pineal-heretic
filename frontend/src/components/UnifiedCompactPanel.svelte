@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, afterUpdate } from 'svelte';
-  import { clientId, API_BASE, WS_BASE, isProcessing, logs, taskStatus } from '../store';
+  import { clientId, API_BASE, WS_BASE, isProcessing, logs, taskStatus, telemetryEvents } from '../store';
   
   // ==========================================
   // TARGET & ENGINE TELEMETRY (TargetPanel)
@@ -161,6 +161,7 @@
       const payload: any = { client_id: $clientId, user_message: currentInput };
       if (currentImage) payload.image_data = currentImage;
       const endpoint = activeAgentId === 'ASPASIA' ? '/api/aspasia/chat' : '/api/executor/intervene';
+      // Aspasia is an observer, no direct commands. Only executor commands handled on backend (if any)
       if (activeAgentId !== 'ASPASIA') payload.action_type = `DIRECT_CMD_${activeAgentId}`;
 
       const res = await fetch(`${API_BASE}${endpoint}`, {
@@ -172,6 +173,29 @@
       const data = await res.json();
       messages = [...messages, { sender: activeAgentId, text: data.message }];
       speak(data.message);
+      
+      // MÜDAHALE (INTERVENTION) KONTROLÜ
+      if (data.action && data.action.action_type) {
+          try {
+              await fetch(`${API_BASE}/api/executor/intervene`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      client_id: $clientId,
+                      action_type: data.action.action_type,
+                      target_agent: data.action.target_agent || null,
+                      parameters: data.action.parameters || {}
+                  })
+              });
+              messages = [...messages, {
+                  sender: 'SİSTEM',
+                  text: `KOMUT İCRA EDİLDİ: ${data.action.action_type}${data.action.target_agent ? ' → ' + data.action.target_agent : ''}`
+              }];
+          } catch (e) {
+              console.error("Müdahale komutu gönderilemedi:", e);
+          }
+      }
+      
     } catch (error: any) {
       messages = [...messages, { sender: 'SİSTEM', text: `HATA: ${error.message}` }];
     } finally {
@@ -180,18 +204,13 @@
   }
 
   async function sendCommand(actionType: string) {
-    try {
-      messages = [...messages, { sender: 'SİSTEM', text: `KOMUT GÖNDERİLİYOR: ${actionType}` }];
-      const res = await fetch(`${API_BASE}/api/executor/intervene`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_id: $clientId, action_type: actionType })
-      });
-      const data = await res.json();
-      messages = [...messages, { sender: 'SİSTEM', text: `SONUÇ: ${data.message}` }];
-    } catch (error: any) {
-      messages = [...messages, { sender: 'SİSTEM', text: `HATA: ${error.message}` }];
-    }
+    // Disabled in Observer mode.
+  }
+
+  function explainState() {
+    activeAgentId = 'ASPASIA';
+    inputMessage = 'Şu anki durumu bana özetler misin? Telemetri ne söylüyor? Neden bu aşamadayız?';
+    sendMessage();
   }
 
   function handleKeydown(e: KeyboardEvent) { if (e.key === 'Enter') sendMessage(); }
@@ -348,9 +367,9 @@
             <button class="brass px-3 py-1 rounded font-cinzel font-bold text-[10px] {localModelActive ? 'opacity-100 shadow-[0_0_10px_rgba(0,0,0,0.8)]' : 'opacity-70'}" on:click={toggleLocalModel} disabled={isSettingModel || $isProcessing}>LOKAL</button>
             <button class="brass px-3 py-1 rounded font-cinzel font-bold text-[10px] {!localModelActive ? 'opacity-100 shadow-[0_0_10px_rgba(0,0,0,0.8)]' : 'opacity-70'}" on:click={toggleLocalModel} disabled={isSettingModel || $isProcessing}>API</button>
             <div class="flex-1 h-7 bg-black rounded flex items-center px-2 gap-2 border border-[#333]">
-              <span class="text-[8px] text-green-400">VU</span>
+              <span class="text-[8px] text-green-400">CONFIDENCE</span>
               <div class="flex-1 h-1 bg-[#222] rounded overflow-hidden">
-                <div class="h-full bg-green-400 transition-all duration-300" style="width:{Math.random()*70 + 20}%"></div>
+                <div class="h-full bg-green-400 transition-all duration-300" style="width:{overallConfidence * 100}%"></div>
               </div>
             </div>
             <button class="bg-[#c9a86a] hover:brightness-110 text-black px-5 py-1 rounded font-cinzel font-bold text-[11px] disabled:opacity-50" on:click={triggerAnalysis} disabled={$isProcessing || !targetUrl}>{$isProcessing ? 'RUNNING' : 'INITIATE ●'}</button>
@@ -403,8 +422,8 @@
       </div>
 
       <div class="flex items-center gap-2 mt-2">
-        <button class="bg-[#7a0000] text-white px-3 py-1 rounded text-[10px] font-bold hover:brightness-110" on:click={() => sendCommand('HALT')}>HALT</button>
-        <button class="bg-[#b8860b] text-black px-3 py-1 rounded text-[10px] font-bold hover:brightness-110" on:click={() => sendCommand('OVERRIDE_CONFIDENCE')}>OVERRIDE CONF.</button>
+        <button class="bg-[#2563eb] text-white px-3 py-1 rounded text-[10px] font-bold hover:brightness-110" on:click={explainState}>EXPLAIN STATE (Neden?)</button>
+        <span class="text-[8px] text-gray-500 font-mono">ASPASIA Gözlemci Modu Aktif</span>
       </div>
     </div>
   </div>

@@ -30,23 +30,25 @@ except Exception:
     from agents.autonomous_verifier import AutonomousVerifier
     from agents.interpreter_agent import InterpreterAgent
 
+try:
+    from agent_core.domain.memory_models import TaskSnapshot, AgentRun
+except Exception:
+    from domain.memory_models import TaskSnapshot, AgentRun
+
 class InsufficientEvidenceError(RuntimeError):
     pass
 
 class VerifiedNote(BaseModel):
     note: str
 
-class TaskStatus(BaseModel):
-    task_id: str
-    status: str
-    current_agent: Optional[str] = None
-    evidence_chain: List[Dict] = []
-    created_at: datetime = None
-    completed_at: Optional[datetime] = None
+class TaskStatus(TaskSnapshot):
+    pass
 
 class PinealExecutor:
-    def __init__(self, log_callback=None):
+    def __init__(self, log_callback=None, emit_event_callback=None, snapshot_callback=None):
         self._log = log_callback or (lambda level, msg: None)
+        self._emit = emit_event_callback or (lambda evt: None)
+        self._snapshot_cb = snapshot_callback
         self.router = CognitiveRouter()
         self.memory = CanonicalMemory()
         self.injector = MemoryInjector()
@@ -60,6 +62,20 @@ class PinealExecutor:
             "pattern_interrupt": PatternInterrupt(),
             "autonomous_verifier": AutonomousVerifier(self.search_engine),
             "interpreter": InterpreterAgent(self.llm_gateway),
+        }
+
+    def _snapshot(self, status: TaskStatus):
+        if self._snapshot_cb:
+            self._snapshot_cb(status)
+            
+    def _summarize_input(self, input_data: dict, agent_name: str) -> dict:
+        profile = input_data.get("target_profile", {})
+        return {
+            "bio_len": len(profile.get("bio", "")),
+            "post_count": len(profile.get("posts", [])),
+            "has_images": bool(profile.get("images")),
+            "has_mirror": "user_mirror" in input_data,
+            "has_target_analysis": "target_analysis" in input_data,
         }
 
     async def _download_images(self, urls: List[str]) -> List[str]:
@@ -87,6 +103,9 @@ class PinealExecutor:
         return VerifiedNote(note=verified)
 
     async def execute_task(self, input_data: Dict[str, Any], task_id: str) -> TaskStatus:
+        from agent_core.schemas.telemetry import (
+            TaskStartedEvent, StepCompletedEvent, ErrorHaltEvent, TaskCompletedEvent, GenericLogEvent, Severity
+        )
         status = TaskStatus(task_id=task_id, status="processing", created_at=datetime.now(timezone.utc))
         input_data["sacred_rules"] = self.injector.fetch_active_rules()
 
@@ -94,8 +113,17 @@ class PinealExecutor:
         if imgs and isinstance(imgs[0], str) and imgs[0].startswith("http"):
             input_data["target_profile"]["images"] = await self._download_images(imgs)
 
+        self._emit(TaskStartedEvent(
+            task_id=task_id,
+            agent_name="PinealExecutor",
+            input_summary="Profil verisi işleniyor, ajan rotası çiziliyor."
+        ))
+
         route: RoutePlan = await self.router.analyze(input_data)
         self._log("INFO", "[" + task_id + "] ROUTE: " + " -> ".join(route.agents))
+        status.planned_agents = route.agents.copy()
+        self._snapshot(status)
+        
         deferred = []
         try:
             for agent_name in route.agents:
@@ -106,6 +134,22 @@ class PinealExecutor:
                     raise KeyError("Bilinmeyen yetenek: " + agent_name)
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
+                
+                run = AgentRun(
+                    task_id=task_id,
+                    agent_name=agent_name,
+                    status="running",
+                    started_at=datetime.now(timezone.utc),
+                    input_summary=self._summarize_input(input_data, agent_name),
+                )
+                status.agent_runs[agent_name] = run
+                self._snapshot(status)
+                
+                self._emit(TaskStartedEvent(
+                    task_id=task_id,
+                    agent_name=agent_name,
+                    input_summary="Ajan tetiklendi"
+                ))
                 try:
                     result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
                     if not isinstance(result, BaseModel):
@@ -113,9 +157,20 @@ class PinealExecutor:
                 except InsufficientEvidenceError:
                     raise
                 except Exception as e:
+                    run.status = "failed"
+                    run.error_code = type(e).__name__
+                    run.error_message = str(e)[:200]
                     status.status = "failed"
                     status.completed_at = datetime.now(timezone.utc)
+                    self._snapshot(status)
                     self._log("ERROR", f"[{task_id}] AGENT {agent_name} BASTARISIZ: {type(e).__name__}: {str(e)[:200]}")
+                    self._emit(ErrorHaltEvent(
+                        task_id=task_id,
+                        agent_name=agent_name,
+                        error_code=type(e).__name__,
+                        error_message=str(e)[:200],
+                        severity=Severity.Critical
+                    ))
                     self._log("ERROR", f"[{task_id}] PIPELINE FAILED; silent continuation disabled")
                     await self.memory.merge_evidence(task_id, status.evidence_chain)
                     return status
@@ -124,6 +179,11 @@ class PinealExecutor:
                 if check.confidence < 0.6:
                     halt_reason = f"Düşük güven ({check.confidence}). Router zinciri kesti."
                     self._log("ERROR", f"[{task_id}] COGNITIVE ROUTER: {halt_reason}")
+                    run.status = "halted"
+                    run.error_code = "LOW_CONFIDENCE"
+                    run.error_message = halt_reason
+                    status.halted_reason = halt_reason
+                    self._snapshot(status)
                     raise InsufficientEvidenceError(halt_reason)
 
                 if check.is_suspicious:
@@ -141,36 +201,84 @@ class PinealExecutor:
                     input_data["target_authentic_vector"] = await self._calculate_authentic_vector(input_data["target_analysis"])
 
                 status.evidence_chain.append({"agent": agent_name, "result": result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                
+                run.status = "completed"
+                run.completed_at = datetime.now(timezone.utc)
+                run.output_summary = result.model_dump()
+                run.confidence = round(check.confidence, 3)
+                if agent_name not in status.completed_agents:
+                    status.completed_agents.append(agent_name)
+                
+                if agent_name == "resonance_calc":
+                    status.resonance_score = result.compatibility_score
+                self._snapshot(status)
+                
+                self._emit(StepCompletedEvent(
+                    task_id=task_id,
+                    agent_name=agent_name,
+                    step_name="execute",
+                    output_hash="HASH"
+                ))
 
                 if agent_name == "resonance_calc" and result.compatibility_score < 0.70:
                     self._log("ERROR", "[" + task_id + "] FREKANS UYUSMAZLIGI: " + str(round(result.compatibility_score, 2)))
                     status.status = "halted_frequency"
                     await self.memory.merge_evidence(task_id, status.evidence_chain)
+                    self._snapshot(status)
                     return status
 
             for agent_name in deferred:
                 status.current_agent = agent_name
                 self._log("WARNING", "[" + task_id + "] AGENT " + agent_name + ": calisiyor")
+                run = AgentRun(
+                    task_id=task_id,
+                    agent_name=agent_name,
+                    status="running",
+                    started_at=datetime.now(timezone.utc),
+                    input_summary=self._summarize_input(input_data, agent_name),
+                )
+                status.agent_runs[agent_name] = run
+                self._snapshot(status)
                 try:
                     result = await self.agents[agent_name].execute(input_data, self.memory, self.llm_gateway)
                 except Exception as e:
+                    run.status = "failed"
+                    run.error_code = type(e).__name__
+                    run.error_message = str(e)[:200]
                     status.status = "failed"
                     status.completed_at = datetime.now(timezone.utc)
+                    self._snapshot(status)
                     self._log("ERROR", f"[{task_id}] AGENT {agent_name} BASTARISIZ: {type(e).__name__}: {str(e)[:200]}")
                     await self.memory.merge_evidence(task_id, status.evidence_chain)
                     return status
+                    
                 status.evidence_chain.append({"agent": agent_name, "result": result.model_dump(), "timestamp": datetime.now(timezone.utc).isoformat()})
+                run.status = "completed"
+                run.completed_at = datetime.now(timezone.utc)
+                run.output_summary = result.model_dump()
+                run.confidence = 0.90
+                if agent_name not in status.completed_agents:
+                    status.completed_agents.append(agent_name)
+                self._snapshot(status)
                 self._log("INFO", "[" + task_id + "] HOOK: mesaj dovuldu")
 
             status.status = "completed"
             status.completed_at = datetime.now(timezone.utc)
             await self.memory.merge_evidence(task_id, status.evidence_chain)
+            self._snapshot(status)
             self._log("INFO", "[" + task_id + "] TAMAMLANDI. Kanit adimi: " + str(len(status.evidence_chain)))
+            self._emit(TaskCompletedEvent(
+                task_id=task_id,
+                agent_name="PinealExecutor",
+                final_result_hash="DONE",
+                duration_ms=0
+            ))
         except InsufficientEvidenceError as e:
             self._log("ERROR", "[" + task_id + "] KANIT KILIDI: " + str(e))
             status.status = "halted_evidence"
             status.completed_at = datetime.now(timezone.utc)
             await self.memory.merge_evidence(task_id, status.evidence_chain)
+            self._snapshot(status)
         return status
 
     async def _calculate_authentic_vector(self, data_dict: dict) -> dict:
@@ -215,3 +323,4 @@ class PinealExecutor:
             }
 
 executor = PinealExecutor()
+

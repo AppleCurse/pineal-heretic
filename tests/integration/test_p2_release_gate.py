@@ -57,6 +57,10 @@ async def mock_query_json(prompt, response_model, **kwargs):
         return VerificationResult(
             claim_text="test", truth_status="DOĞRULANDI", evidence_url="http", contradiction_detail="none"
         )
+    elif response_model.__name__ == "AuthenticVectorResult":
+        return response_model(
+            depth=0.8, energy=0.4, achilles_heel="yalnizlik", core_wound="anlasilmama", dark_detail="sessizlik"
+        )
     raise ValueError(f"Unknown model: {response_model.__name__}")
 
 
