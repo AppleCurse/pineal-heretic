@@ -1,56 +1,56 @@
-# PINEAL-HERETIC v3.0 : SHADOW PROTOCOLS
-[![Python Tests & Codecov](https://github.com/AppleCurse/pineal-heretic/actions/workflows/codecov.yml/badge.svg)](https://github.com/AppleCurse/pineal-heretic/actions/workflows/codecov.yml)
-> "Kısıtlama yok. Sadece etki."
+# PINEAL-HERETIC v2.0 / v3.0
 
-**PINEAL-HERETIC**, kendi sunucularÄ±nÄ±zda Ã§alÄ±ÅŸan (Self-hosted), otonom bir **Sosyal Zeka (OSINT/SIGINT)** ve Psikolojik Harp aÄŸÄ±dÄ±r. DÄ±ÅŸ API'lere (Apify vb.) baÄŸÄ±mlÄ± olmadan, hedeflerin sosyal medya (Instagram, X) ayak izlerini gizlice (Stealth modda) toplar, analiz eder ve zayÄ±f noktalarÄ±nÄ± tespit eder.
+**PINEAL-HERETIC**, hedef sosyal medya profillerini (Instagram / X) anonim olarak tarayan, psikolojik analiz (AÅŸil Tendonu, Temel Yara, KaranlÄ²k Detay, Frekans RezonansÄ±) gerÃ§ekleÅŸtiren ve otonom iletiÅŸim stratejileri Ã¼reten bir yapay zeka analiz platformudur.
 
-## ğŸ’€ Temel Ã–zellikler (Core Architecture)
+---
 
-### 1. GÃ¶rÃ¼nmez Ä°stihbarat (Stealth Scraper)
-*   **Instagram Ghost & X Scraper:** `playwright-stealth` entegrasyonu sayesinde AutomationControlled (Bot) bayraklarÄ±na takÄ±lmadan tamamen anonim olarak veri Ã§eker.
-*   **CROSS Mode:** Hedefin X ve Instagram profillerini Ã§aprazlayarak (Cross-Reference) Ã§eliÅŸkilerini bulur ve tek bir dijital kimlik (Payload) Ã§Ä±karÄ±r.
-*   **Otonom Cookie Havuzu:** `sessionid` ve `auth_token` deÄŸerlerini havuzdan rastgele seÃ§erek IP ban veya Rate Limit riskini sÄ±fÄ±ra indirir.
+## 1. GerÃ§ek Sistem Mimarisi
 
-### 2. Otonom Ajan AÄŸÄ± (Cognitive Agents)
-Ham veriler, birbirini denetleyen ve iletiÅŸimde olan bir yapay zeka aÄŸÄ± tarafÄ±ndan iÅŸlenir:
-*   **Autonomous Verifier:** Ä°nternet Ã¼zerinde (Tavily/SerpAPI) iddialarÄ±n doÄŸruluÄŸunu araÅŸtÄ±rÄ±p yalanlarÄ± ayÄ±klar (Anti-HalÃ¼sinasyon ZÄ±rhÄ±).
-*   **Human Behavior Analyzer:** Hedefin psikolojik yarasÄ±nÄ± (AÅŸil Tendonu) arar ve skorlar.
-*   **Mirror of Truth:** Kendi belirlediÄŸiniz Kutsal Kurallar ile hedefin verilerini karÅŸÄ±laÅŸtÄ±rÄ±p Frekans Uyumunu (Resonance) hesaplar.
-*   **Pattern Interrupt:** Beklentileri kÄ±ran ve hedefi manipÃ¼le eden tek atÄ±mlÄ±k 'Kanca' mesajlarÄ± oluÅŸturur.
-
-### 3. SHADOW PROTOCOLS (KaranlÄ±k Ajanlar)
-*   **Dark Triad Analizi:** Hedefin Machiavellianism, Narcissism ve Psychopathy skorlarÄ±nÄ± Ã§Ä±kararak manipÃ¼lasyona olan aÃ§Ä±klÄ±ÄŸÄ±nÄ± (Exploitability) belirler.
-*   **Dark NLP Engine (Neuro-Linguistic Warfare):** Hedefin bilinÃ§altÄ±na direkt komutlar enjekte eden (Embedded Commands) tehlikeli dil desenleri oluÅŸturur.
-
-### 4. Otonom GÃ¶lge Sohbet (Shadow Chat)
-Hedef kancayÄ± yuttuÄŸunda operasyon devam eder. **Dialogue Manager**, hedefin verdiÄŸi cevabÄ±n zafiyetini (Agresif, SavunmacÄ±, Ä°lgili) saniyeler iÃ§inde analiz eder ve Kutsal KurallarÄ± unutmadan (HafÄ±za desteÄŸiyle) bir sonraki manipÃ¼latif mesajÄ± otonom olarak Ã¼retir.
-
-### 5. Hibrit Zeka (Intelligence Routing)
-Maliyetleri %80 oranÄ±nda dÃ¼ÅŸÃ¼rmek iÃ§in Zeka DaÄŸÄ±lÄ±mÄ± yapar.
-*   **TIER 2 (Llama 3 / Haiku):** Metin ayrÄ±ÅŸtÄ±rma, json onarÄ±mÄ± ve iddia teyidi (Verifier) gibi dÃ¼ÅŸÃ¼k IQ gerektiren iÅŸleri Ã¼stlenir.
-*   **TIER 1 (Claude 3.5 Sonnet / GPT-4o):** Psikolojik harp, karanlÄ±k analiz ve otonom sohbeti yÃ¼rÃ¼tÃ¼r.
-
-## âš™ï¸ Kurulum ve AteÅŸleme
-
-1. Depoyu KlonlayÄ±n:
-```bash
-git clone https://github.com/AppleCurse/pineal-heretic.git
-cd pineal-heretic
+```JSON
+Svelte UI (Port 5173)  â”€â”€[HTTP / WebSecket]â”€â”€>  FastAPI (Port 8000)
+                                                              â”‚
+                                                              â–¼
+                                                          PinealExecutor
+                                                             â”‚
+                       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•±Â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                       â–¼                                       â–¼                                      â–¼
+                 MirrorOfTruth               AutonomousVerifier             HumanBehaviorAnalyzer
+                        â”€                              â”€                              â”€
+                        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â•±Â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                                                              â”‚
+                                                              â–¼
+                                                        ResonanceCalculator
+                                                             â”‚
+                                                              â–¼
+                                                          PatternInterrupt
+                                                              â”‚
+                                                              â–¼
+                                                          LLMGateway (OpenRouter)
+                                                             â”‚
+                                                              â–¼
+                                                       TaskSnapshot & WebSocket Event
+                                                              â”€
+                                                              â–¼
+                                                        Aspasia (Observer / TercÃ¼man)
 ```
 
-2. OrtamÄ± HazÄ±rlayÄ±n:
-```bash
-pip install -r requirements.txt
-playwright install chromium
-```
+- Karar MekanizmasÄ±: KararlarÄ± `PinealExecutor` ve `CognitiveRouter` verir.
+- Aspasia: Sistemin karar vericisi deÄŸil; sistem durumunu, gÃ¼ven skorlarÄ±nÄ± ve telemetriyi doÀšµÈX[[Hİ[[±,Xñ,^XHpéñ,ZÛ^X[ˆğí›[XÚHÈ\˜ğïX[ˆ
+ØœÙ\™\ŠHØ]X[±,Y1,\‹‚‹Hğï™[›ZÈ	ˆØ\ØNˆTH[˜Z\›\±,Hİ\[H˜^›1,H
+[‹[Y[[ÜJH™Hœ[™X[İ˜][šœÛÛ˜ÜŞX\ñ,[™HØZÛ[±,\‹ˆØZH1ešYœ™[[YHYX[\±,H[Úİ\‹‚‚‹KKB‚ˆÈÈ‹ˆİ\[[H™H˜qgÛ]XB‚ˆÈÈÈÙ\™ZÜÚ[š[[\‚‹H]ÛˆËŒL
+Â‹H›ÙKšœÈN
+È
+œ›Û[™péÚ[ŠB‹H^]ÜšYÚÚ›ÛZ][H
+^]ÜšYÚ[œİ[Ú›ÛZ][X
+B‚ˆÈÈÈKˆ]Ûˆ˜q'Ü[[1,[1,ZÛ\±,N‚˜˜\Úœ\[œİ[\ˆ™\]Z\™[Y[Ëœ^]ÜšYÚ[œİ[Ú›ÛZ][B˜‚ˆÈÈÈ‹ˆÛÛ™šYğï˜\Ş[Û‚˜œ[™X[İ˜][šœÛÛ˜™^XH™[˜ÜŞX\ñ,[˜HTH[˜Z\›\±,[³±,HZÛ^Z[‚˜œÛÛ‚Âˆ˜\WÚÙ^HˆœÚË[Ü‹]ŒKVSÕT—ÓÔS”“ÕUT—ÒÑVH‚ˆ]š[WÚÙ^Hˆ›KVSÕT—ÕU’SWÒÑVH‚ŸB˜‚ˆÈÈÈËˆ˜XÚÙ[™	ÚH˜qgÛ]XN‚˜˜\Úœ]Ûˆ[H]šXÛÜ›ˆ˜XÚÙ[™˜\N˜\KZÜİLËŒŒŒHK\Ü˜ŠŠ™^XHÚ[™İÜÈpéÚ[ˆğ&­rY[ˆ˜\Û]˜˜]0éØ[1,qgİ1,\±[Xš[\ŠJ‚‚ˆÈÈÈˆœ›Û[™	ÚH˜qgÛ]XN‚˜˜\Ú˜Ùœ›Û[™›œH[œİ[›œH[ˆ]‚˜‚‹KKB‚ˆÈÈËˆ\İ™Hñ'Ü[[XB‚ˆÈÈÈš\š[H™H[YÜ˜\Ş[Ûˆ\İ\šH
+]\İ
+N‚˜˜\Úœ]Ûˆ[H]\İ\İËÈ]‚˜ŠŠ0ïHLM\İZÙ]H0éØ[qgñ,\ˆ™Hñ'Ü[[±,\šJ‚‚ˆÈÈÈpéİ[ˆyØH
+L‘JHš^\™H	ˆÛ˜\Úİ\İN‚Ø[›1,HSH™H[›1,ZÈ[[Y]šHZñ,qgñ,[±,Hğ&­r[[XZÚpéÚ[‚˜˜\Úœ]Ûˆ\İÙL™WÙš^\™KœB˜H\İ‚ŒKˆHZ˜[±,HØ[›1,HSH0éØq'Ü±,[,arÄ±yla sÄ±rayla koÅŸturur.
+2. 12 adet anlÄ±k `TaskSnapshot` Ã¼retir.
+3. `AgentRun` baÅŸlangÄ±Ã§/bitiÅŸ zamanlarÄ±nÄ± ve gÃ¼ven skorlarÄ±nÄ± kaydeder.
+4. Aspasia'nÄ±n yapÄ±landÄ±rÄ±lmIÅŸ telemetriyi okumasÄ±nÄ± teyit eder.
 
-3. Sistemi BaÅŸlatÄ±n:
-```bash
-python -m uvicorn backend.api:app --host 127.0.0.1 --port 8000
-```
-4. TarayÄ±cÄ±nÄ±zdan `http://127.0.0.1:8000/` adresine gidin.
-5. "Gizli Kasa" (Vault) Ã¼zerinden `OPENROUTER_API_KEY` ve "X Cookie" (veya Instagram sessionid) deÄŸerlerinizi girin.
-6. Hedefin X veya Instagram URL'sini girip Otonom AÄŸÄ± tetikleyin.
+---
 
-## ğŸ›¡ï¸ UyarÄ± (Disclaimer)
-Bu proje araÅŸtÄ±rma, kÄ±rmÄ±zÄ± takÄ±m (Red Teaming) operasyonlarÄ± ve Sosyal MÃ¼hendislik analizleri iÃ§in geliÅŸtirilmiÅŸtir. Sorumluluk tamamen kullanÄ±cÄ±ya aittir. KÄ±sÄ±tlama yok, sadece etki.
+## 4. Lisans ve Gizlilik
+Bu yazÄ±lÄ±m araÉŸtÄ±rma ve analitik amaÃ§lÀ±dÄ±r.

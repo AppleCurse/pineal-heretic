@@ -50,39 +50,63 @@ class AspasiaChief:
 
     def build_telemetry_summary(self, room_state: Any) -> str:
         """Ajan telemetrisini ve kanıt zincirini yapılandırılmış veriden özetler."""
-        if not isinstance(room_state, dict):
+        if not room_state:
             return "Sistem beklemede. Henüz aktif görev tetiklenmedi."
-            
-        executor = room_state.get("executor")
-        if not executor:
-            return "Executor yüklenmemiş."
-            
+
         snapshot = None
-        # Odaya kayıtlı active_tasks dict'inden son snapshot'ı al
-        active_tasks = room_state.get("active_tasks", {})
-        if active_tasks:
-            snapshot = list(active_tasks.values())[-1]
+        if hasattr(room_state, "task_id"):
+            snapshot = room_state
+        elif isinstance(room_state, dict):
+            active_tasks = room_state.get("active_tasks", {})
+            if active_tasks:
+                snapshot = list(active_tasks.values())[-1]
+            elif "task_id" in room_state:
+                snapshot = room_state
+            else:
+                vault = room_state.get("vault", {})
+                api_status = 'OK' if vault.get('or_key') else 'X'
+                return f"Sistem boşta. API: {api_status} | Beklemedeyiz."
+        else:
+            return "Sistem beklemede. Henüz aktif görev tetiklenmedi."
 
         if not snapshot:
-            vault = room_state.get("vault", {})
-            api_status = 'OK' if vault.get('or_key') else 'X'
-            return f"Sistem boşta. API: {api_status} | Beklemedeyiz."
-            
+            return "Sistem beklemede. Henüz aktif görev tetiklenmedi."
+
+        if isinstance(snapshot, dict):
+            task_id = snapshot.get("task_id", "unknown")
+            status = snapshot.get("status", "unknown")
+            current_agent = snapshot.get("current_agent")
+            planned = snapshot.get("planned_agents", [])
+            completed = snapshot.get("completed_agents", [])
+            halted_reason = snapshot.get("halted_reason")
+            agent_runs = snapshot.get("agent_runs", {})
+        else:
+            task_id = getattr(snapshot, "task_id", "unknown")
+            status = getattr(snapshot, "status", "unknown")
+            current_agent = getattr(snapshot, "current_agent", None)
+            planned = getattr(snapshot, "planned_agents", []) or []
+            completed = getattr(snapshot, "completed_agents", []) or []
+            halted_reason = getattr(snapshot, "halted_reason", None)
+            agent_runs = getattr(snapshot, "agent_runs", {}) or {}
+
         lines = [
-            f"Görev: {snapshot.task_id} | Durum: {snapshot.status}",
-            f"Planlanan: {' -> '.join(snapshot.planned_agents)}",
-            f"Tamamlanan: {', '.join(snapshot.completed_agents) or 'henüz yok'}",
+            f"Görev: {task_id} | Durum: {status}",
+            f"Aktif Ajan: {current_agent or 'Yok'}",
+            f"Planlanan: {' -> '.join(planned) if planned else 'Henüz rota çizilmedi'}",
+            f"Tamamlanan: {', '.join(completed) or 'henüz yok'}",
         ]
         
-        if snapshot.halted_reason:
-            lines.append(f"DURDURMA NEDENİ: {snapshot.halted_reason}")
+        if halted_reason:
+            lines.append(f"DURDURMA NEDENİ: {halted_reason}")
             
-        if snapshot.agent_runs:
-            for name, run in snapshot.agent_runs.items():
-                conf = f"{run.confidence:.2f}" if run.confidence is not None else "?"
-                lines.append(f"  [{name}] {run.status} | güven:{conf}")
-                if run.error_message:
-                    lines.append(f"    HATA: {run.error_message}")
+        if agent_runs:
+            for name, run in agent_runs.items():
+                conf = f"{run.confidence:.2f}" if getattr(run, "confidence", None) is not None else "?"
+                st = getattr(run, "status", "unknown")
+                lines.append(f"  [{name}] {st} | güven:{conf}")
+                err = getattr(run, "error_message", None)
+                if err:
+                    lines.append(f"    HATA: {err}")
                     
         return "\n".join(lines)
 
