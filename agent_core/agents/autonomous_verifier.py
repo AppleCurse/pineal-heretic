@@ -3,17 +3,17 @@ from typing import Dict, List
 
 class Claim(BaseModel):
     claim_text: str
-    category: str
+    category: str = "genel"
 
 class VerificationResult(BaseModel):
     claim_text: str
     truth_status: str
-    evidence_url: str
-    contradiction_detail: str
+    evidence_url: str = ""
+    contradiction_detail: str = ""
 
 class VerifierReport(BaseModel):
-    verifications: List[VerificationResult]
-    overall_authenticity_score: float
+    verifications: List[VerificationResult] = []
+    overall_authenticity_score: float = 0.0
     status: str = "VERIFIED"
 
     model_config = ConfigDict(extra="forbid")
@@ -36,20 +36,25 @@ class AutonomousVerifier:
             )
 
         claim_prompt = (
-            f"Hedefin biyografisi şu: '{bio}'\n"
-            "Burada hedefin iddia ettiği nesnel, teyit edilebilir bilgileri çıkar.\n"
-            "Eğer teyit edilebilecek bir iddia yoksa boş liste dön.\n"
+            f"Hedefin biyografisi: '{bio}'\n"
+            "Bu biyografide geçen doğrulanabilir, nesnel bilgileri (iş, unvan, okul, şirket vb.) çıkar.\n"
+            "Örnek format: {\"claims\": [{\"claim_text\": \"Stratejist\", \"category\": \"meslek\"}]}\n"
+            "Eğer teyit edilebilecek bir iddia yoksa {\"claims\": []} dön."
         )
 
         class ClaimList(BaseModel):
-            claims: List[Claim]
+            claims: List[Claim] = []
 
-        claim_data = await llm_gateway.query_json(claim_prompt, ClaimList, tier=2)
+        try:
+            claim_data = await llm_gateway.query_json(claim_prompt, ClaimList, tier=2)
+            claims_list = claim_data.claims if hasattr(claim_data, "claims") else []
+        except Exception:
+            claims_list = []
 
-        if not claim_data.claims:
+        if not claims_list:
             return VerifierReport(
                 verifications=[],
-                overall_authenticity_score=0.0,
+                overall_authenticity_score=1.0,
                 status="UNVERIFIED",
             )
 

@@ -65,12 +65,12 @@ class AspasiaChief:
 
         if not snapshot:
             vault = room_state.get("vault", {})
-            api_status = '✓' if vault.get('or_key') else '✗'
+            api_status = 'OK' if vault.get('or_key') else 'X'
             return f"Sistem boşta. API: {api_status} | Beklemedeyiz."
             
         lines = [
             f"Görev: {snapshot.task_id} | Durum: {snapshot.status}",
-            f"Planlanan: {' → '.join(snapshot.planned_agents)}",
+            f"Planlanan: {' -> '.join(snapshot.planned_agents)}",
             f"Tamamlanan: {', '.join(snapshot.completed_agents) or 'henüz yok'}",
         ]
         

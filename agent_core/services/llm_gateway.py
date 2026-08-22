@@ -114,45 +114,94 @@ class LLMGateway:
     def extract_json(self, text: str) -> dict:
         """Markdown fence ve etiketleri temizleyip JSON ayıklar."""
         text = text.strip()
-        # Remove ```json and ```
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
         
-        # Sadece { ... } arasını al
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1:
-            text = text[start:end+1]
-            
+        # 1. Kod blokları varsa önce onları dene
+        if "```json" in text:
+            blocks = [b.split("```")[0].strip() for b in text.split("```json")[1:]]
+            for b in reversed(blocks):
+                try:
+                    return json.loads(b)
+                except Exception:
+                    pass
+        elif "```" in text:
+            blocks = [b.split("```")[0].strip() for b in text.split("```")[1:]]
+            for b in reversed(blocks):
+                try:
+                    return json.loads(b)
+                except Exception:
+                    pass
+
+        # 2. Doğrudan parse dene
         try:
             return json.loads(text)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON Ayrıştırma Hatası: {str(e)} | Orijinal metin: {text[:100]}...")
+        except Exception:
+            pass
+
+        # 3. Metin içindeki tüm JSON nesnelerini tara
+        decoder = json.JSONDecoder()
+        start = 0
+        found_objs = []
+        while start < len(text):
+            pos = text.find('{', start)
+            if pos == -1:
+                break
+            try:
+                obj, end_idx = decoder.raw_decode(text[pos:])
+                if isinstance(obj, dict):
+                    found_objs.append(obj)
+                start = pos + max(1, end_idx)
+            except Exception:
+                start = pos + 1
+
+        if found_objs:
+            for obj in reversed(found_objs):
+                if "$defs" not in obj and "properties" not in obj:
+                    return obj
+            return found_objs[-1]
+
+        raise ValueError(f"JSON Ayrıştırma Hatası | Orijinal metin: {text[:100]}...")
+
+    def _coerce_to_schema(self, parsed_data: Any, schema: Type[T]) -> T:
+        if not isinstance(parsed_data, dict):
+            raise ValueError(f"Beklenen JSON nesnesi (dict), alınan: {type(parsed_data)}")
+        
+        # Eğer model 'properties' altına sarmaladıysa unwrap yap
+        if "properties" in parsed_data and hasattr(schema, "model_fields") and "properties" not in schema.model_fields:
+            props = parsed_data["properties"]
+            if isinstance(props, dict):
+                sample_val = next(iter(props.values()), None)
+                if not isinstance(sample_val, dict) or "type" not in sample_val:
+                    parsed_data = props
+
+        # Eğer model sınıf ismi altına sarmaladıysa unwrap yap
+        root_key = getattr(schema, "__name__", "")
+        if root_key and root_key in parsed_data and isinstance(parsed_data[root_key], dict):
+            parsed_data = parsed_data[root_key]
+
+        return schema(**parsed_data)
 
     async def query_json(self, prompt: str, schema: Type[T], temperature: float = 0.7, tier: int = 1, model: str = None) -> T:
         """LLM'den sorgu atar, beklenen JSON formatını (Pydantic schema) tamir mekanizmasıyla garanti eder."""
         full_prompt = (
             f"{prompt}\n\n"
-            f"Lütfen çıktını SADECE aşağıdaki JSON formatında ver. Markdown etiketi kullanma, hiçbir ek açıklama yapma:\n"
-            f"{json.dumps(schema.model_json_schema())}"
+            f"Lütfen çıktını SADECE aşağıdaki JSON formatına uygun DOLDURULMUŞ JSON verisi olarak ver. Markdown etiketi kullanma, hiçbir ek açıklama yapma:\n"
+            f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}"
         )
         
         selected_model = model or (self.TIER_1_MODEL if tier == 1 else self.TIER_2_MODEL)
-        
+        response_text = ""
         try:
             response_text = await self.query(full_prompt, temperature, tier=tier, model=selected_model)
             parsed_data = self.extract_json(response_text)
-            return schema(**parsed_data)
-        except ValueError:
+            return self._coerce_to_schema(parsed_data, schema)
+        except Exception as err:
             # 1 Kez Repair (Tamir) İsteği
             repair_prompt = (
-                f"Önceki çıktın geçerli bir JSON değildi veya format uymuyordu. "
-                f"Lütfen SADECE şu yapıya uygun geçerli bir JSON döndür:\n{json.dumps(schema.model_json_schema())}\n"
+                f"Önceki çıktın geçerli bir doldurulmuş JSON verisi değildi veya şemaya uymadı ({err}). "
+                f"Lütfen SADECE şu şemaya uygun DOLDURULMUŞ veriyi JSON olarak döndür (şema etiketlerini değil, gerçek veriyi yaz):\n{json.dumps(schema.model_json_schema(), ensure_ascii=False)}\n"
                 f"DİKKAT: Eksik veri varsa uydurma kelimeler veya sahte skorlar YAZMA. Sadece var olanları yerleştir.\n"
                 f"Eklediğin bozuk çıktı şuydu:\n{response_text[:200]}"
             )
             repair_text = await self.query(repair_prompt, temperature, tier=tier, model=selected_model)
             parsed_data = self.extract_json(repair_text)
-            return schema(**parsed_data)
+            return self._coerce_to_schema(parsed_data, schema)
