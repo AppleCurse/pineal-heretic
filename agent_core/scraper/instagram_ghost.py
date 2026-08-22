@@ -110,7 +110,7 @@ class InstagramGhostScraper:
         if "og:description" in html or "og:title" in html:
             return {"_source": "meta_tags"}
 
-        raise InsufficientEvidenceError(f"Instagram HTML'inde veri bulunamadı: {username} - muhtemelen private veya rate-limit")
+        raise InsufficientEvidenceError(f"Instagram HTML'inde JSON bulunamadı: {username} - muhtemelen private veya rate-limit")
 
     def _parse_real_profile(self, raw_json: Dict[str, Any], html: str, username: str) -> InstagramProfile:
         """
