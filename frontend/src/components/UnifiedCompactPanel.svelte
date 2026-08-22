@@ -76,12 +76,12 @@
   // ==========================================
   let apiKey = "";
   let cookie = "";
-  let vaultStatusText = "LOCKED • AES-256";
+  let vaultStatusText = "KEYSTORE • READY";
   let isSealing = false;
 
   async function sealCredentials() {
     isSealing = true;
-    vaultStatusText = "SEALING...";
+    vaultStatusText = "SAVING...";
     try {
       const payload: any = { client_id: $clientId };
       if (apiKey) payload.api_key = apiKey;
@@ -92,11 +92,11 @@
         body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error("Connection error");
-      vaultStatusText = "LOCKED • AES-256";
+      vaultStatusText = "KEYSTORE • ACTIVE";
       apiKey = "";
       cookie = "";
     } catch(err: any) {
-      vaultStatusText = "BREACH RISK";
+      vaultStatusText = "ERROR";
     } finally {
       isSealing = false;
     }
@@ -316,14 +316,14 @@
     
     <!-- Vault -->
     <div class="brass rounded p-2">
-      <div class="font-cinzel text-[9px] font-bold text-dark mb-1">KEY LOCK • VAULT • CLIENT_ID</div>
+      <div class="font-cinzel text-[9px] font-bold text-dark mb-1">KEYSTORE • SESSION VAULT</div>
       <div class="flex items-center gap-2 mt-1 mb-2">
-        <button class="w-8 h-8 rounded-full brass border-2 border-black flex items-center justify-center cursor-pointer hover:brightness-110 disabled:opacity-50 {vaultStatusText === 'BREACH RISK' ? 'border-red-500 animate-pulse' : ''}" on:click={sealCredentials} disabled={isSealing}>
+        <button class="w-8 h-8 rounded-full brass border-2 border-black flex items-center justify-center cursor-pointer hover:brightness-110 disabled:opacity-50 {vaultStatusText === 'ERROR' ? 'border-red-500 animate-pulse' : ''}" on:click={sealCredentials} disabled={isSealing}>
           🔑
         </button>
         <div class="text-[8px] font-bold text-dark">
-          <span class:text-red-800={vaultStatusText === 'BREACH RISK'}>{vaultStatusText}</span><br>
-          task_id odalı • room isolation
+          <span class:text-red-800={vaultStatusText === 'ERROR'}>{vaultStatusText}</span><br>
+          client_id tabanlı • session keystore
         </div>
       </div>
       <div class="bg-black border border-[#c9a86a]/40 p-2 rounded">
