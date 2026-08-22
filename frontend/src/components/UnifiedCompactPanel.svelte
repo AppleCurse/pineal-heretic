@@ -226,18 +226,29 @@
   // AGENT FLOW (AgentFlowPanel)
   // ==========================================
   const agentList = [
-    { id: "human_behavior", name: "HUMAN BEHAVIOR", colorHex: "#d97706" },
     { id: "mirror_truth", name: "MIRROR TRUTH", colorHex: "#16a34a" },
-    { id: "resonance_calc", name: "RESONANCE CALC", colorHex: "#2563eb" },
     { id: "autonomous_verifier", name: "VERIFIER", colorHex: "#9333ea" },
-    { id: "interpreter", name: "INTERPRETER", colorHex: "#dc2626" }
+    { id: "human_behavior", name: "HUMAN BEHAVIOR", colorHex: "#d97706" },
+    { id: "resonance_calc", name: "RESONANCE CALC", colorHex: "#2563eb" },
+    { id: "pattern_interrupt", name: "PATTERN INTERRUPT", colorHex: "#dc2626" }
   ];
   let runs: Record<string, any> = {};
   let currentAgent = "";
   let overallConfidence = 0;
+  let plannedAgents: string[] = [];
+  let completedAgents: string[] = [];
+  let haltedReason: string | null = null;
+  let taskState = "IDLE";
+  let taskId = "";
 
   $: {
     if ($taskStatus) {
+      if ($taskStatus.task_id) taskId = $taskStatus.task_id;
+      if ($taskStatus.status) taskState = $taskStatus.status;
+      if ($taskStatus.planned_agents) plannedAgents = $taskStatus.planned_agents;
+      if ($taskStatus.completed_agents) completedAgents = $taskStatus.completed_agents;
+      if ($taskStatus.halted_reason !== undefined) haltedReason = $taskStatus.halted_reason;
+
       if ($taskStatus.reso) {
         ritualMatchScore = ($taskStatus.reso.ritual_match_score || 0) * 100;
         playlistResonance = ($taskStatus.reso.playlist_resonance || 0) * 100;
@@ -246,7 +257,7 @@
       if ($taskStatus.runs) {
         runs = $taskStatus.runs;
         let lastConf = 0;
-        Object.values(runs).forEach(r => { if (r.confidence !== undefined) lastConf = r.confidence; });
+        Object.values(runs).forEach(r => { if (r.confidence !== undefined && r.confidence !== null) lastConf = r.confidence; });
         overallConfidence = lastConf;
       }
       if ($taskStatus.current_agent) currentAgent = $taskStatus.current_agent;
@@ -431,34 +442,61 @@
   <!-- ==================== RIGHT: AGENT CHAIN ==================== -->
   <div class="col-span-12 lg:col-span-3 space-y-3">
     <div class="brass rounded p-3">
-      <div class="font-cinzel text-[11px] font-bold text-dark mb-3">AGENT CHAIN • KARAR AĞACI</div>
+      <div class="flex justify-between items-center mb-2">
+        <div class="font-cinzel text-[11px] font-bold text-dark">AGENT CHAIN • DURUM</div>
+        <span class="text-[8px] font-mono px-1.5 py-0.5 rounded font-bold {taskState === 'completed' ? 'bg-green-800 text-white' : taskState.startsWith('halted') || taskState === 'failed' ? 'bg-red-800 text-white' : taskState === 'processing' ? 'bg-amber-700 text-white animate-pulse' : 'bg-black/40 text-dark'}">{taskState.toUpperCase()}</span>
+      </div>
+
+      {#if taskId}
+        <div class="text-[8px] font-mono text-dark/70 mb-2">GÖREV: {taskId}</div>
+      {/if}
+
       <div class="space-y-2">
         {#each agentList as agent, i}
+          {@const run = runs[agent.id]}
+          {@const isCompleted = run?.status === 'completed'}
+          {@const isRunning = currentAgent === agent.id && taskState === 'processing'}
+          {@const isHalted = run?.status === 'halted' || run?.status === 'failed'}
           <div class="flex items-center gap-2">
-            <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style="background: {agent.colorHex};">{i + 1}</div>
+            <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold" style="background: {agent.colorHex};">
+              {#if isCompleted}✓{:else if isRunning}▶{:else if isHalted}✗{:else}{i + 1}{/if}
+            </div>
             <div class="flex-1">
-              <div class="text-[9px] font-bold text-dark">{agent.name}</div>
-              <div class="h-1 bg-black/20 rounded mt-1 overflow-hidden">
-                <div class="h-full transition-all duration-500" style="background: {agent.colorHex}; width: {runs[agent.id]?.status === 'completed' ? '100%' : currentAgent === agent.id ? '50%' : '0%'};"></div>
+              <div class="flex justify-between text-[9px] font-bold text-dark">
+                <span>{agent.name}</span>
+                {#if run?.confidence !== undefined && run?.confidence !== null}
+                  <span class="font-mono text-[8px]">{run.confidence.toFixed(2)}</span>
+                {/if}
+              </div>
+              <div class="h-1.5 bg-black/20 rounded mt-1 overflow-hidden">
+                <div class="h-full transition-all duration-500 {isCompleted ? 'bg-green-600' : isHalted ? 'bg-red-600' : isRunning ? 'bg-amber-500 animate-pulse' : ''}" style="width: {isCompleted ? '100%' : isRunning ? '60%' : isHalted ? '100%' : '0%'};"></div>
               </div>
             </div>
-            <div class="text-[8px] font-mono text-dark w-12 text-right">
-              {#if runs[agent.id]?.status === 'completed'}
-                {(runs[agent.id]?.confidence || 1.0).toFixed(2)}
-              {:else if currentAgent === agent.id}
-                active
+            <div class="text-[8px] font-mono w-14 text-right">
+              {#if isCompleted}
+                <span class="text-green-900 font-bold">DONE</span>
+              {:else if isHalted}
+                <span class="text-red-700 font-bold">{run?.status === 'halted' ? 'HALT' : 'FAIL'}</span>
+              {:else if isRunning}
+                <span class="text-amber-900 font-bold animate-pulse">RUNNING</span>
               {:else}
-                wait
+                <span class="text-dark/40">WAIT</span>
               {/if}
             </div>
           </div>
           {#if i < agentList.length - 1}
-            <div class="ml-3 w-0.5 h-3 bg-[#8c6a3a]/50"></div>
+            <div class="ml-3 w-0.5 h-2 bg-[#8c6a3a]/50"></div>
           {/if}
         {/each}
       </div>
+
+      {#if haltedReason}
+        <div class="mt-3 bg-red-900/20 border border-red-800/40 rounded p-2 text-[8px] text-red-900 leading-tight">
+          <b>DURDURMA BİLGİSİ:</b> {haltedReason}
+        </div>
+      {/if}
       
-      <div class="mt-4 bg-black rounded p-2 border border-[#c9a86a]/30">
+      <div class="mt-3 bg-black rounded p-2 border border-[#c9a86a]/30">
         <div class="text-[9px] text-[#c9a86a]">OVERALL CONFIDENCE</div>
         <div class="flex items-center gap-2 mt-1">
           <div class="flex-1 h-2 bg-[#222] rounded overflow-hidden">
