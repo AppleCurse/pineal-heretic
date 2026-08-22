@@ -246,13 +246,28 @@ async def run_mission(req: InitiatePayload):
             await broadcast_log(client_id, "INFO", f"UPLINK: Hedefe sızılıyor -> {req.url} [{req.scraper_type.upper()}]")
             try:
                 from playwright.async_api import async_playwright
-                from playwright_stealth import stealth_async
+                try:
+                    from playwright_stealth import Stealth
+                    stealth_engine = Stealth()
+                except Exception:
+                    stealth_engine = None
+
                 async with async_playwright() as p:
                     browser = None
                     ctx = None
                     page = None
                     try:
-                        browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                        launch_kwargs = {"headless": True, "args": ["--disable-blink-features=AutomationControlled"]}
+                        chrome_paths = [
+                            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+                        ]
+                        for cp in chrome_paths:
+                            if os.path.exists(cp):
+                                launch_kwargs["executable_path"] = cp
+                                break
+
+                        browser = await p.chromium.launch(**launch_kwargs)
                         ctx_kwargs = {"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                         
                         if req.scraper_type == "instagram" and InstagramGhostScraper:
@@ -267,7 +282,8 @@ async def run_mission(req: InitiatePayload):
                                     await ctx.add_cookies(parsed)
                             
                             page = await ctx.new_page()
-                            await stealth_async(page)
+                            if stealth_engine:
+                                await stealth_engine.apply_stealth_async(page)
                             ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                             ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                             
@@ -295,7 +311,8 @@ async def run_mission(req: InitiatePayload):
                                 if parsed:
                                     await ctx.add_cookies(parsed)
                             page = await ctx.new_page()
-                            await stealth_async(page)
+                            if stealth_engine:
+                                await stealth_engine.apply_stealth_async(page)
                             ig_scraper = InstagramGhostScraper(vault_cookies={"sessionid": cookie} if cookie else None)
                             ig_data = await ig_scraper.scrape_async(req.url.strip("/").split("/")[-1], playwright_page=page)
                             

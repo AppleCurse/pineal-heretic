@@ -87,13 +87,8 @@ class InstagramGhostScraper:
 
     def _extract_from_html(self, html: str, username: str) -> Dict[str, Any]:
         """
-        Instagram'ın sayfa içine gömdüğü JSON'u bul.
-        2 yöntem dener, ikisi de yoksa HALT.
-        Yöntem 1: /api/v1/users/web_profile_info
-        Yöntem 2: window._sharedData / __additionalDataLoaded
+        Instagram'ın sayfa içine gömdüğü JSON'u veya public meta tag'lerini bul.
         """
-        # Yöntem 1: Embedded JSON - __additionalDataLoaded
-        # Yöntem 2: <script type="application/json" data-sjs>
         patterns = [
             r'window\._sharedData\s*=\s*({.*?});</script>',
             r'"ProfilePage":\s*\[({.*?})\]',
@@ -111,63 +106,65 @@ class InstagramGhostScraper:
                     logging.warning(f"Failed to parse JSON in instagram_ghost: {e}")
                     continue
         
-        # Eğer hiçbir pattern tutmadıysa, bu halüsinasyon değil, kanıt yok demektir
-        raise InsufficientEvidenceError(f"Instagram HTML'inde JSON bulunamadı: {username} - muhtemelen private veya rate-limit")
+        # Meta tag fallback (Modern Instagram web sayfaları)
+        if "og:description" in html or "og:title" in html:
+            return {"_source": "meta_tags"}
+
+        raise InsufficientEvidenceError(f"Instagram HTML'inde veri bulunamadı: {username} - muhtemelen private veya rate-limit")
 
     def _parse_real_profile(self, raw_json: Dict[str, Any], html: str, username: str) -> InstagramProfile:
         """
-        Ham JSON'u gerçek Pydantic modele çevir.
-        Burada asla uydurma yok, sadece olanı al.
+        Ham JSON veya meta tag'leri gerçek Pydantic modele çevirir.
         """
         try:
-            # Instagram'ın yapısı sürekli değişir, en stabil 2 yer:
-            # 1. meta property og:description
-            # 2. ld+json
-            # Biz en garanti olanı: sayfadaki script tag'lerinden user objesi
+            is_private = '"is_private":true' in html or '"isPrivate":true' in html or 'Bu hesap gizli' in html or 'This account is private' in html
             
-            # Basit ve dürüst yaklaşım: eğer private ise direkt HALT
-            if '"is_private":true' in html or '"isPrivate":true' in html:
-                # Private hesapta post yoksa, bunu uydurma
-                # Sadece temel bilgileri al, postları boş bırak
-                is_private = True
-            else:
-                is_private = False
+            follower_count = None
+            following_count = None
+            full_name = None
+            biography = None
 
-            # Follower sayısını regex ile gerçek yerden al
-            follower_match = re.search(r'"edge_followed_by":{"count":(\d+)}', html)
-            following_match = re.search(r'"edge_follow":{"count":(\d+)}', html)
-            
-            # Eğer sayılar yoksa, None bırak - 0 uydurma
-            follower_count = int(follower_match.group(1)) if follower_match else None
-            following_count = int(following_match.group(1)) if following_match else None
+            # 1. Meta Description (Follower & Following)
+            og_desc_match = re.search(r'<meta property="og:description" content="([^"]*)"', html)
+            if og_desc_match:
+                og_desc = og_desc_match.group(1)
+                fol_m = re.search(r'([\d\.,]+)\s*(?:Takipçi|Followers)', og_desc, re.IGNORECASE)
+                if fol_m:
+                    follower_count = int(fol_m.group(1).replace('.', '').replace(',', ''))
+                fing_m = re.search(r'([\d\.,]+)\s*(?:Takip|Following)', og_desc, re.IGNORECASE)
+                if fing_m:
+                    following_count = int(fing_m.group(1).replace('.', '').replace(',', ''))
 
-            # Bio'yu og:description'dan al - en gerçek yer
-            bio_match = re.search(r'<meta property="og:description" content="([^"]+)"', html)
-            biography = bio_match.group(1) if bio_match else None
+            # 2. Meta Title (Full Name)
+            og_title_match = re.search(r'<meta property="og:title" content="([^"]*)"', html)
+            if og_title_match:
+                name_m = re.search(r'^(.*?)\s*\(@', og_title_match.group(1))
+                if name_m:
+                    full_name = name_m.group(1).strip()
 
+            # 3. Bio parse
+            bio_match = re.search(r'<meta content="[^"]*Instagram\'da [^:]*:\s*&quot;([^&]*)&quot;" name="description"', html)
+            if bio_match:
+                biography = bio_match.group(1).strip()
+
+            # Profile pic
             profile_pic_match = re.search(r'"profile_pic_url":"([^"]+)"', html)
             profile_pic_url = profile_pic_match.group(1).replace("\\u0026", "&") if profile_pic_match else None
-            if profile_pic_url:
-                profile_pic_url = profile_pic_url.encode().decode('unicode_escape')
 
-            # Postları topla - sadece gerçek shortcode'lar
+            # Postlar
             posts = []
             shortcodes = re.findall(r'"shortcode":"([A-Za-z0-9_-]+)"', html)
             display_urls = re.findall(r'"display_url":"([^"]+)"', html)
-            
-            # Eşleştir, uydurma yapma - sayılar eşit değilse en az olan kadar al
             for i in range(min(len(shortcodes), len(display_urls), 12)):
                 try:
-                    url = display_urls[i].replace("\\u0026", "&").encode().decode('unicode_escape')
+                    url = display_urls[i].replace("\\u0026", "&")
                     posts.append(InstagramPost(
                         shortcode=shortcodes[i],
                         display_url=url,
-                        caption=None,  # Caption ayrı parse edilecek, yoksa None - uydurma yok
+                        caption=None,
                         is_video=False
                     ))
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Failed to parse post url: {e}")
+                except Exception:
                     continue
 
             # Eğer private ve post yoksa, sonraki ajanlar boş veriyle halüsinasyon göreceği için durdur
